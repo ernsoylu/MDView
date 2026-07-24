@@ -152,7 +152,7 @@ func writeTTY(chunks []string) tea.Cmd {
 		if err != nil {
 			return nil
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		for _, c := range chunks {
 			if _, err := io.WriteString(f, c); err != nil {
 				return nil
