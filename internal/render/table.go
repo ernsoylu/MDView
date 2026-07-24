@@ -85,7 +85,7 @@ func (r *renderer) table(n *extast.Table, width int) []Line {
 		widths[mi]--
 	}
 
-	srcLine := r.nodeLine(n)
+	srcLine := nodeLine(r.doc, n)
 	border := func(left, mid, right string) Line {
 		spans := []Span{{Text: left, Style: &r.th.TableBorder}}
 		for i, w := range widths {

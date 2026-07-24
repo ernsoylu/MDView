@@ -83,7 +83,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Render equations with [go-latex/latex](https://codeberg.org/go-latex/latex) (matplotlib-mathtext subset) to raster images, displayed through the v0.4 image pipeline (half-block mosaic / Kitty).
 - Fallback: terminals without image support — and inline math in general — show the raw TeX source styled like a code span, never broken glyph soup.
 
-### 7. Keymap (implemented in v0.1)
+### 7. Keymap (implemented)
 | Keys | Action |
 |---|---|
 | `j` / `↓`, `k` / `↑` | scroll one line |
@@ -91,10 +91,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `Space` / `PgDn` / `Ctrl+F`, `b` / `PgUp` / `Ctrl+B` | full page down / up |
 | `g` / `Home`, `G` / `End` | top / bottom |
 | mouse wheel | scroll 3 lines |
+| `/` | incremental search (type; `Enter` keep, `Esc` cancel+restore) |
+| `n` / `N` | next / previous match (wraps) |
+| `t` | TOC popup (type to fuzzy-filter; `Enter` jump, `Esc` close) |
+| `Esc` | clear search highlights |
 | `?` | toggle help overlay |
 | `q` / `Ctrl+C` | quit |
 
-Reserved for later: `/` `n` `N` (search), `t` (TOC), `f` (link hints), `Ctrl+O`/`Ctrl+I` (jumplist), `e`/`i` (editor), `y` (yank code block).
+Reserved for later: `f` (link hints), `Ctrl+O`/`Ctrl+I` (jumplist), `e`/`i` (editor), `y` (yank code block).
 
 ---
 
@@ -139,7 +143,7 @@ Future packages (`internal/nav`, `internal/img`, `internal/editor`) are created 
 ## Part 4: Roadmap & Status
 
 - [x] **v0.1 — read-only pager:** GFM parse; styled-line IR with source mapping; wrap/lists/quotes/tables/task lists; chroma syntax highlighting; adaptive default theme + Plain; alt-screen pager with keymap + wheel; status bar; help overlay; resize re-anchoring; stdin + piped dump modes; OSC 8; golden/unit/fuzz/bench tests; CI.
-- [ ] **v0.2 — search + TOC:** incremental `/` with `n`/`N` and match highlighting; fuzzy TOC popup jump.
+- [x] **v0.2 — search + TOC:** incremental `/` with `n`/`N` and match highlighting; fuzzy TOC popup jump.
 - [ ] **v0.3 — links & flow:** hint mode + mouse follow; unified jumplist (`Ctrl+O`/`Ctrl+I`); relative-doc + GitHub-slug anchor resolution; `xdg-open` for URLs; `e` editor integration via `vim +N`; watch mode.
 - [ ] **v0.4 — images:** half-block mosaic fallback; Kitty protocol with Unicode placeholders.
 - [ ] **v0.5 — LaTeX math:** `$`/`$$` goldmark extension; go-latex/latex rendering through the image pipeline; raw-TeX fallback.

@@ -10,22 +10,24 @@ import (
 )
 
 type Theme struct {
-	Heading     [6]lipgloss.Style
-	Emph        lipgloss.Style
-	Strong      lipgloss.Style
-	Strike      lipgloss.Style
-	CodeSpan    lipgloss.Style
-	CodeBlock   lipgloss.Style // base style for code text without a token color
-	Link        lipgloss.Style
-	Image       lipgloss.Style
-	QuoteBar    lipgloss.Style
-	ListMarker  lipgloss.Style
-	TableBorder lipgloss.Style
-	TableHeader lipgloss.Style
-	Rule        lipgloss.Style
-	Dim         lipgloss.Style // raw HTML, image URLs, de-emphasized text
-	StatusBar   lipgloss.Style
-	Chroma      *chroma.Style // syntax highlighting palette for code blocks
+	Heading       [6]lipgloss.Style
+	Emph          lipgloss.Style
+	Strong        lipgloss.Style
+	Strike        lipgloss.Style
+	CodeSpan      lipgloss.Style
+	CodeBlock     lipgloss.Style // base style for code text without a token color
+	Link          lipgloss.Style
+	Image         lipgloss.Style
+	QuoteBar      lipgloss.Style
+	ListMarker    lipgloss.Style
+	TableBorder   lipgloss.Style
+	TableHeader   lipgloss.Style
+	Rule          lipgloss.Style
+	Dim           lipgloss.Style // raw HTML, image URLs, de-emphasized text
+	StatusBar     lipgloss.Style
+	SearchHit     lipgloss.Style // every search match in the viewport
+	SearchCurrent lipgloss.Style // the match n/N is parked on
+	Chroma        *chroma.Style  // syntax highlighting palette for code blocks
 }
 
 // Default is the built-in adaptive theme (Catppuccin Latte/Mocha accents).
@@ -54,6 +56,12 @@ func Default() Theme {
 	t.Rule = t.TableBorder
 	t.Dim = lipgloss.NewStyle().Faint(true)
 	t.StatusBar = lipgloss.NewStyle().Reverse(true)
+	t.SearchHit = lipgloss.NewStyle().
+		Foreground(lipgloss.AdaptiveColor{Light: "#eff1f5", Dark: "#1e1e2e"}).
+		Background(lipgloss.AdaptiveColor{Light: "#df8e1d", Dark: "#f9e2af"})
+	t.SearchCurrent = lipgloss.NewStyle().
+		Foreground(lipgloss.AdaptiveColor{Light: "#eff1f5", Dark: "#1e1e2e"}).
+		Background(lipgloss.AdaptiveColor{Light: "#fe640b", Dark: "#fab387"})
 	t.Chroma = styles.Get("catppuccin-mocha")
 	return t
 }
@@ -69,6 +77,7 @@ func Plain() Theme {
 	t.Emph, t.Strong, t.Strike, t.CodeSpan, t.CodeBlock = s, s, s, s, s
 	t.Link, t.Image, t.QuoteBar, t.ListMarker = s, s, s, s
 	t.TableBorder, t.TableHeader, t.Rule, t.Dim, t.StatusBar = s, s, s, s, s
+	t.SearchHit, t.SearchCurrent = s, s
 	t.Chroma = styles.Fallback
 	return t
 }

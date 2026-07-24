@@ -58,11 +58,11 @@ func (r *renderer) blocks(parent ast.Node, width int, tight bool) []Line {
 func (r *renderer) block(n ast.Node, width int) []Line {
 	switch n := n.(type) {
 	case *ast.Heading:
-		return wrap(r.inlines(n, &r.th.Heading[n.Level-1]), width, r.nodeLine(n))
+		return wrap(r.inlines(n, &r.th.Heading[n.Level-1]), width, nodeLine(r.doc, n))
 	case *ast.Paragraph:
-		return wrap(r.inlines(n, nil), width, r.nodeLine(n))
+		return wrap(r.inlines(n, nil), width, nodeLine(r.doc, n))
 	case *ast.TextBlock:
-		return wrap(r.inlines(n, nil), width, r.nodeLine(n))
+		return wrap(r.inlines(n, nil), width, nodeLine(r.doc, n))
 	case *ast.Blockquote:
 		return r.blockquote(n, width)
 	case *ast.List:
@@ -124,7 +124,7 @@ func (r *renderer) list(n *ast.List, width int) []Line {
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
 		content := r.blocks(c, innerW, n.IsTight)
 		if len(content) == 0 {
-			content = []Line{{SourceLine: r.nodeLine(c)}}
+			content = []Line{{SourceLine: nodeLine(r.doc, c)}}
 		}
 		var marker string
 		if n.IsOrdered() {
@@ -278,19 +278,19 @@ func (r *renderer) htmlBlock(n *ast.HTMLBlock, width int) []Line {
 }
 
 // nodeLine best-effort maps a node to the 1-based source line it starts on.
-func (r *renderer) nodeLine(n ast.Node) int {
+func nodeLine(doc *parser.Doc, n ast.Node) int {
 	if n == nil {
 		return 0
 	}
 	if t, ok := n.(*ast.Text); ok {
-		return r.doc.LineOf(t.Segment.Start)
+		return doc.LineOf(t.Segment.Start)
 	}
 	if lb, ok := n.(interface{ Lines() *text.Segments }); ok && lb.Lines().Len() > 0 {
 		sg := lb.Lines().At(0)
-		return r.doc.LineOf(sg.Start)
+		return doc.LineOf(sg.Start)
 	}
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
-		if l := r.nodeLine(c); l > 0 {
+		if l := nodeLine(doc, c); l > 0 {
 			return l
 		}
 	}
