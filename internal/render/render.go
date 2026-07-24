@@ -28,7 +28,7 @@ const (
 
 // Options extends Render with image support.
 type Options struct {
-	BaseDir      string    // directory for resolving relative image paths; "" disables file images
+	BaseDir      string // directory for resolving relative image paths; "" disables file images
 	Images       ImageMode
 	MaxImageRows int           // cap on image height in cells; 0 means 24
 	IDs          *img.Registry // required for ImagesKitty
