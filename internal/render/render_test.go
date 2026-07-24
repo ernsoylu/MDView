@@ -109,6 +109,19 @@ func TestLongWordChunks(t *testing.T) {
 	}
 }
 
+func TestUnescapeInline(t *testing.T) {
+	src := []byte(`\*literal\* &copy; &amp; &bogus; \&amp; back\slash` + "\n")
+	lines := render.Render(parser.Parse(src), theme.Plain(), 80)
+	if len(lines) == 0 {
+		t.Fatal("no lines")
+	}
+	got := lines[0].Plain()
+	want := `*literal* © & &bogus; &amp; back\slash`
+	if got != want {
+		t.Errorf("unescaped text = %q, want %q", got, want)
+	}
+}
+
 func TestSourceLineMapping(t *testing.T) {
 	src := []byte("# Title\n\npara\n\n## Second\n\n- item\n")
 	lines := render.Render(parser.Parse(src), theme.Plain(), 40)

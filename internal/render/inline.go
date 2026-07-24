@@ -1,11 +1,13 @@
 package render
 
 import (
+	"html"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/yuin/goldmark/ast"
 	extast "github.com/yuin/goldmark/extension/ast"
+	"github.com/yuin/goldmark/util"
 )
 
 // seg is a styled fragment of inline content before line breaking.
@@ -39,7 +41,7 @@ func (r *renderer) inlineChildren(parent ast.Node, style *lipgloss.Style, link s
 	for c := parent.FirstChild(); c != nil; c = c.NextSibling() {
 		switch n := c.(type) {
 		case *ast.Text:
-			*out = append(*out, seg{text: string(n.Segment.Value(r.src)), style: style, link: link})
+			*out = append(*out, seg{text: unescape(string(n.Segment.Value(r.src))), style: style, link: link})
 			if n.HardLineBreak() {
 				*out = append(*out, seg{brk: true})
 			} else if n.SoftLineBreak() {
@@ -107,7 +109,7 @@ func nodeText(n ast.Node, src []byte) string {
 		for c := n.FirstChild(); c != nil; c = c.NextSibling() {
 			switch t := c.(type) {
 			case *ast.Text:
-				b.Write(t.Segment.Value(src))
+				b.WriteString(unescape(string(t.Segment.Value(src))))
 			case *ast.String:
 				b.Write(t.Value)
 			default:
@@ -116,5 +118,38 @@ func nodeText(n ast.Node, src []byte) string {
 		}
 	}
 	walk(n)
+	return b.String()
+}
+
+// unescape resolves CommonMark backslash escapes and HTML entity references
+// in inline text — goldmark leaves both to the output writer, which this
+// renderer replaces. Backslash escapes win over entities, so \&amp; stays
+// the literal text "&amp;".
+func unescape(s string) string {
+	if !strings.ContainsAny(s, `\&`) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '\\' && i+1 < len(s) && util.IsPunct(s[i+1]) {
+			b.WriteByte(s[i+1])
+			i++
+			continue
+		}
+		if c == '&' {
+			// CommonMark entities always end in ';'; the longest HTML5
+			// entity name is ~32 chars.
+			if j := strings.IndexByte(s[i:min(len(s), i+34)], ';'); j > 1 {
+				if cand := s[i : i+j+1]; html.UnescapeString(cand) != cand {
+					b.WriteString(html.UnescapeString(cand))
+					i += j
+					continue
+				}
+			}
+		}
+		b.WriteByte(c)
+	}
 	return b.String()
 }
