@@ -8,7 +8,7 @@ builds:
       - CGO_ENABLED=0
     ldflags:
       - -s -w -X main.version={{.Version}}
-    goos: [linux, darwin, windows]
+    goos: [linux, darwin, windows, freebsd]
     goarch: [amd64, arm64]
 
 archives:

@@ -165,7 +165,11 @@ func (m *Model) editorCmd() tea.Cmd {
 		m.flash = "no file to edit (stdin)"
 		return nil
 	}
-	parts := strings.Fields(os.Getenv("EDITOR"))
+	ed := m.editor
+	if ed == "" {
+		ed = os.Getenv("EDITOR")
+	}
+	parts := strings.Fields(ed)
 	if len(parts) == 0 {
 		parts = []string{"vim"}
 	}

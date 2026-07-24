@@ -85,6 +85,7 @@ type Model struct {
 	store       *state.Store // reading-position persistence; nil disables
 	restoreLine int          // saved position to apply on the next reflow
 	maxWidth    int          // content width cap
+	editor      string       // editor override; "" falls back to $EDITOR
 	codeBlocks  []render.CodeBlock
 
 	// search
@@ -141,6 +142,20 @@ func (m Model) WithMaxWidth(w int) Model {
 	if w > 0 {
 		m.maxWidth = w
 	}
+	return m
+}
+
+// WithEditor overrides the editor used by the e/i keys.
+func (m Model) WithEditor(ed string) Model {
+	if ed != "" {
+		m.editor = ed
+	}
+	return m
+}
+
+// WithImages overrides the detected image mode.
+func (m Model) WithImages(mode render.ImageMode) Model {
+	m.imageMode = mode
 	return m
 }
 

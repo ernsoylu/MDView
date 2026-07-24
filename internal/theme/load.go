@@ -2,7 +2,9 @@ package theme
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/alecthomas/chroma/v2/styles"
@@ -93,6 +95,9 @@ func Load(path string) (Theme, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&f); err != nil {
+		if errors.Is(err, io.EOF) { // empty or fully commented: no overrides
+			return Default(), nil
+		}
 		return Theme{}, fmt.Errorf("theme %s: %w", path, err)
 	}
 	t := Default()

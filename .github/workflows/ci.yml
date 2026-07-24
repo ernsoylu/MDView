@@ -19,6 +19,8 @@ jobs:
         run: go vet ./...
       - name: test
         run: go test -race ./...
+      - name: shellcheck
+        run: shellcheck install.sh
 
   lint:
     runs-on: ubuntu-latest

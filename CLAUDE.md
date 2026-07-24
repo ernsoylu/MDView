@@ -58,6 +58,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Resize:** re-render at the new width, then re-anchor the viewport to the source line that was previously at the top (via the IR's source mapping).
 - **Color handling:** truecolor→256→16→mono degradation and `NO_COLOR` come free from lipgloss/termenv profiles; the default theme uses `AdaptiveColor` for light/dark backgrounds.
 - **External themes (implemented v1.0):** `--theme` takes `default`, `plain`, or a YAML file path; keys (`heading1`…`heading6`, `emph`, `codespan`, `link`, …, `chroma`) overlay the default theme wholesale per key, unknown keys are errors. See `examples/nord.yaml`.
+- **Config directory (implemented v1.1):** first run seeds `~/.MDView/` with commented `config.yaml` (`theme`, `width`, `editor`, `images`) and `theme.yaml` templates. Precedence: flags > `config.yaml` > `~/.MDView/theme.yaml` > builtin default; empty/commented files mean defaults, a malformed `config.yaml` warns and continues. (Deliberate deviation from XDG config dir per user decision; positions still use XDG state.)
 - **Width:** content width = terminal width − 2, capped at 120 columns; piped output uses `$COLUMNS` or 80.
 - **UTF-8 Symbols:** list bullets by depth (`•`, `◦`, `▪`), quote borders (`│`), checkboxes (`[✓]`, `[ ]`), table borders (`┌ ┬ ┐ ├ ┼ ┤ └ ┴ ┘ ─ │`), thematic break (`─`).
 - **Wide content:** long code lines chunk-wrap and over-wide tables shrink+truncate cells with `…`; horizontal scrolling is an open question for later.
@@ -124,7 +125,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Package Layout
 ```
-cmd/mdv          CLI entry: input handling, TTY detection, piped-dump mode
+cmd/mdv          CLI entry: flags, config precedence, TTY detection, piped-dump mode
+internal/config  ~/.MDView seeding and config.yaml loading
 internal/parser  goldmark setup, Doc with byte-offset → source-line index
 internal/render  AST → styled-line IR: inline flattening, wrapping, tables, chroma
 internal/theme   semantic Theme struct; Default() (adaptive) and Plain(); chroma palette
@@ -151,4 +153,5 @@ Future packages (`internal/nav`, `internal/img`, `internal/editor`) are created 
 - [x] **v0.4 — images:** half-block mosaic fallback; Kitty protocol with Unicode placeholders.
 - [x] **v0.5 — LaTeX math:** `$`/`$$` goldmark extension; go-latex/latex rendering through the image pipeline; raw-TeX fallback.
 - [x] **v1.0 — polish:** external YAML themes; per-file reading-position persistence (XDG state dir); `y` yank code block via OSC 52; `--width` flag; goreleaser + man page.
+- [x] **v1.1 — installability:** `~/.MDView` config dir (auto-seeded `config.yaml` + `theme.yaml`); `install.sh` (`curl | sh`, OS/arch detection, checksum verify, PATH setup in shell rc); README; FreeBSD builds; shellcheck in CI.
 - **Backlog:** section folding (`za`/`zR`/`zM`), Sixel/iTerm2 images, remote image fetching, footnotes, regex search, horizontal scroll for wide content, lazy viewport syntax highlighting.
