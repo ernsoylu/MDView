@@ -10,6 +10,8 @@ import (
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/text"
+
+	"github.com/ernsoylu/MDView/internal/mathext"
 )
 
 // Doc is a parsed markdown document together with its source, which goldmark
@@ -21,7 +23,7 @@ type Doc struct {
 }
 
 func Parse(source []byte) *Doc {
-	md := goldmark.New(goldmark.WithExtensions(extension.GFM))
+	md := goldmark.New(goldmark.WithExtensions(extension.GFM, mathext.Extension))
 	root := md.Parser().Parse(text.NewReader(source))
 	offsets := []int{0}
 	for i, b := range source {

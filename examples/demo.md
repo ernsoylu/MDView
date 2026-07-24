@@ -154,9 +154,17 @@ mdv does not interpret HTML; it shows it faithfully.
 
 Inline HTML like <kbd>q</kbd> passes through dimmed as well.
 
-## Math Preview
+## Math Rendering
 
-Inline math $E = mc^2$ and display math stay raw TeX until v0.5:
+Display math renders as an image — half-block mosaic anywhere, real
+pixels in kitty/ghostty — when the expression fits go-latex's mathtext
+subset:
+
+$$f(x) = \frac{\sqrt{x}}{2\pi}$$
+
+Inline math like $E = mc^2$ always stays raw TeX styled as code. So do
+expressions outside the subset: go-latex cannot typeset superscripts or
+subscripts yet, so this integral gracefully shows its source instead:
 
 $$
 \int_0^\infty e^{-x^2}\,dx = \frac{\sqrt{\pi}}{2}

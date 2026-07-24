@@ -8,6 +8,8 @@ import (
 	"github.com/yuin/goldmark/ast"
 	extast "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/util"
+
+	"github.com/ernsoylu/MDView/internal/mathext"
 )
 
 // seg is a styled fragment of inline content before line breaking.
@@ -88,6 +90,9 @@ func (r *renderer) inlineChildren(parent ast.Node, style *lipgloss.Style, link s
 				glyph = "[✓] "
 			}
 			*out = append(*out, seg{text: glyph, style: &r.th.ListMarker})
+		case *mathext.InlineMath:
+			// Inline math always shows its raw TeX, styled like a code span.
+			*out = append(*out, seg{text: "$" + string(n.Value) + "$", style: merged(&r.th.CodeSpan, style), link: link})
 		case *ast.RawHTML:
 			var b strings.Builder
 			for i := 0; i < n.Segments.Len(); i++ {

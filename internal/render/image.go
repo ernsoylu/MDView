@@ -2,6 +2,7 @@ package render
 
 import (
 	"fmt"
+	"image"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,28 +57,10 @@ func (r *renderer) imageBlock(n *ast.Image, width int) []Line {
 		return nil
 	}
 	srcLine := nodeLine(r.doc, n.Parent()) // the enclosing paragraph
-
-	var out []Line
-	switch r.opts.Images {
-	case ImagesKitty:
-		if r.opts.IDs == nil {
-			return nil
-		}
-		key := fmt.Sprintf("%s|%d|%dx%d", path, fi.ModTime().UnixNano(), cols, rows)
-		id, fresh := r.opts.IDs.ID(key)
-		if fresh {
-			tx, err := img.Transmit(m, id, cols, rows)
-			if err != nil {
-				return nil
-			}
-			r.transmissions = append(r.transmissions, tx)
-		}
-		style := lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("#%06X", id)))
-		for _, row := range img.PlaceholderRows(id, cols, rows) {
-			out = append(out, Line{Spans: []Span{{Text: row, Style: &style}}, SourceLine: srcLine})
-		}
-	case ImagesHalfblock:
-		out = mosaicLines(img.Mosaic(m, cols, rows), srcLine)
+	keyBase := fmt.Sprintf("%s|%d", path, fi.ModTime().UnixNano())
+	out := r.pictureLines(m, keyBase, cols, rows, srcLine)
+	if out == nil {
+		return nil
 	}
 
 	alt := nodeText(n, r.src)
@@ -86,6 +69,38 @@ func (r *renderer) imageBlock(n *ast.Image, width int) []Line {
 	}
 	caption := []seg{{text: "🖼 " + alt + " (" + target + ")", style: &r.th.Dim}}
 	return append(out, wrap(caption, width, srcLine)...)
+}
+
+// pictureLines renders a decoded image over a cols×rows cell grid in the
+// active image mode. keyBase identifies the picture for kitty's
+// transmit-once registry; the grid size is appended so resizes retransmit.
+func (r *renderer) pictureLines(m image.Image, keyBase string, cols, rows, srcLine int) []Line {
+	if cols < 1 || rows < 1 {
+		return nil
+	}
+	switch r.opts.Images {
+	case ImagesKitty:
+		if r.opts.IDs == nil {
+			return nil
+		}
+		id, fresh := r.opts.IDs.ID(fmt.Sprintf("%s|%dx%d", keyBase, cols, rows))
+		if fresh {
+			tx, err := img.Transmit(m, id, cols, rows)
+			if err != nil {
+				return nil
+			}
+			r.transmissions = append(r.transmissions, tx)
+		}
+		style := lipgloss.NewStyle().Foreground(lipgloss.Color(fmt.Sprintf("#%06X", id)))
+		var out []Line
+		for _, row := range img.PlaceholderRows(id, cols, rows) {
+			out = append(out, Line{Spans: []Span{{Text: row, Style: &style}}, SourceLine: srcLine})
+		}
+		return out
+	case ImagesHalfblock:
+		return mosaicLines(img.Mosaic(m, cols, rows), srcLine)
+	}
+	return nil
 }
 
 // mosaicLines converts mosaic cells to IR lines, merging runs of identical

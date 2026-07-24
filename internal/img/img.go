@@ -5,6 +5,7 @@ package img
 
 import (
 	"image"
+	"image/color"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
@@ -56,6 +57,28 @@ func Fit(pxW, pxH, maxCols, maxRows int) (cols, rows int) {
 type Cell struct {
 	TopSet, BottomSet bool
 	Top, Bottom       [3]uint8
+}
+
+// AlphaFromLuminance converts a dark-on-light raster (like go-latex
+// output) into fg-colored glyphs whose alpha follows pixel darkness, so
+// rasterized math blends into any terminal background.
+func AlphaFromLuminance(src image.Image, fg [3]uint8) *image.RGBA {
+	b := src.Bounds()
+	dst := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	for y := 0; y < b.Dy(); y++ {
+		for x := 0; x < b.Dx(); x++ {
+			r, g, bl, _ := src.At(b.Min.X+x, b.Min.Y+y).RGBA()
+			lum := (r + g + bl) / 3 >> 8
+			a := uint32(255 - lum)
+			dst.SetRGBA(x, y, color.RGBA{
+				R: uint8(uint32(fg[0]) * a / 255),
+				G: uint8(uint32(fg[1]) * a / 255),
+				B: uint8(uint32(fg[2]) * a / 255),
+				A: uint8(a),
+			})
+		}
+	}
+	return dst
 }
 
 // Mosaic scales the image to cols×(rows*2) pixels and returns one Cell per

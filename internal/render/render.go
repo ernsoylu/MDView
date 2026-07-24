@@ -13,6 +13,7 @@ import (
 	"github.com/yuin/goldmark/text"
 
 	"github.com/ernsoylu/MDView/internal/img"
+	"github.com/ernsoylu/MDView/internal/mathext"
 	"github.com/ernsoylu/MDView/internal/parser"
 	"github.com/ernsoylu/MDView/internal/theme"
 )
@@ -109,6 +110,8 @@ func (r *renderer) block(n ast.Node, width int) []Line {
 		return []Line{{Spans: []Span{{Text: strings.Repeat("─", width), Style: &r.th.Rule}}}}
 	case *extast.Table:
 		return r.table(n, width)
+	case *mathext.MathBlock:
+		return r.mathBlock(n, width)
 	case *ast.HTMLBlock:
 		return r.htmlBlock(n, width)
 	default:

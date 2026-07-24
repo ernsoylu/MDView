@@ -78,10 +78,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Watch mode (v0.3):** `fsnotify` re-renders on file change while preserving the anchored position, so mdv works as a live preview next to any editor.
 - **Vim RPC:** only if live-preview-in-vim is ever required; prefer msgpack-rpc to headless Neovim over re-implementing modal editing.
 
-### 6. LaTeX Math (v0.5)
-- Parse `$...$` (inline) and `$$...$$` (display) math via a goldmark AST extension — math is not CommonMark/GFM, so documents without math must be completely unaffected.
-- Render equations with [go-latex/latex](https://codeberg.org/go-latex/latex) (matplotlib-mathtext subset) to raster images, displayed through the v0.4 image pipeline (half-block mosaic / Kitty).
-- Fallback: terminals without image support — and inline math in general — show the raw TeX source styled like a code span, never broken glyph soup.
+### 6. LaTeX Math (implemented v0.5)
+- `$...$` (inline) and `$$...$$` (display) parsed by `internal/mathext`, a goldmark extension with conservative rules: dollar amounts (`$5 and $10`) stay text, and documents without math are unaffected.
+- Display math rasterizes via [go-latex/latex](https://codeberg.org/go-latex/latex) v0.3.0 (`mtex` + `drawimg`, 28pt @ 130dpi) through the v0.4 image pipeline capped at 8 rows, recolored by `img.AlphaFromLuminance` so glyphs blend into light or dark backgrounds.
+- **Subset caveat:** go-latex v0.3.0 *panics* on TeX it cannot typeset — including all superscripts/subscripts (`ast.Sup`/`ast.Sub` unimplemented upstream). `renderMath` recovers and falls back to the raw TeX styled like a code block; inline math always stays raw. Revisit the pin when upstream implements sup/sub (fractions, roots, Greek, and function notation do render today).
 
 ### 7. Keymap (implemented)
 | Keys | Action |
@@ -149,6 +149,6 @@ Future packages (`internal/nav`, `internal/img`, `internal/editor`) are created 
 - [x] **v0.2 — search + TOC:** incremental `/` with `n`/`N` and match highlighting; fuzzy TOC popup jump.
 - [x] **v0.3 — links & flow:** hint mode + mouse follow; unified jumplist (`Ctrl+O`/`Ctrl+I`); relative-doc + GitHub-slug anchor resolution; `xdg-open` for URLs; `e` editor integration via `vim +N`; watch mode.
 - [x] **v0.4 — images:** half-block mosaic fallback; Kitty protocol with Unicode placeholders.
-- [ ] **v0.5 — LaTeX math:** `$`/`$$` goldmark extension; go-latex/latex rendering through the image pipeline; raw-TeX fallback.
+- [x] **v0.5 — LaTeX math:** `$`/`$$` goldmark extension; go-latex/latex rendering through the image pipeline; raw-TeX fallback.
 - [ ] **v1.0 — polish:** external YAML themes; per-file reading-position persistence (XDG state dir); `y` yank code block via OSC 52; `--width` flag; goreleaser + man page.
 - **Backlog:** section folding (`za`/`zR`/`zM`), Sixel/iTerm2 images, remote image fetching, footnotes, regex search, horizontal scroll for wide content, lazy viewport syntax highlighting.
