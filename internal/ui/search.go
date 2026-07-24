@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/ernsoylu/MDView/internal/nav"
 )
 
 // match is one search hit: byte offsets into the plain text of one
@@ -107,6 +109,9 @@ func (m Model) updateSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyEnter:
 		m.mode = modeNormal
+		if len(m.matches) > 0 && m.offset != m.searchOrigin {
+			m.jump.Push(nav.Pos{Path: m.path, Offset: m.searchOrigin, SourceLine: m.srcLineAt(m.searchOrigin)})
+		}
 	case tea.KeyEsc:
 		m.mode = modeNormal
 		m.offset = m.searchOrigin

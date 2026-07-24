@@ -34,6 +34,7 @@ func (m Model) updateTOC(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeNormal
 	case tea.KeyEnter:
 		if len(m.filtered) > 0 {
+			m.jump.Push(m.posHere())
 			m.jumpToSourceLine(m.outline[m.filtered[m.tocSel]].SourceLine)
 		}
 		m.mode = modeNormal

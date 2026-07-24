@@ -112,7 +112,9 @@ def fib(n: int) -> int:
 An [inline link](https://example.com), a [reference link][gold], an
 autolink <https://example.com/angle>, and a bare URL that GFM linkifies:
 https://example.com/bare. All emit OSC 8 hyperlinks — click them in a
-modern terminal. This one is long enough to chunk across lines:
+modern terminal, or press `f` and type a label to follow one. This
+[anchor link](#search-playground) jumps to the Search Playground below;
+come back with `Ctrl+O`, go forward again with `Tab`. This one is long enough to chunk across lines:
 https://example.com/a/very/long/path/segment/that/cannot/possibly/fit/on/a/single/terminal/line/anywhere
 
 Images render as placeholders until v0.4:

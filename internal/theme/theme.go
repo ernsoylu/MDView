@@ -27,6 +27,7 @@ type Theme struct {
 	StatusBar     lipgloss.Style
 	SearchHit     lipgloss.Style // every search match in the viewport
 	SearchCurrent lipgloss.Style // the match n/N is parked on
+	HintLabel     lipgloss.Style // link-hint labels in follow mode
 	Chroma        *chroma.Style  // syntax highlighting palette for code blocks
 }
 
@@ -62,6 +63,9 @@ func Default() Theme {
 	t.SearchCurrent = lipgloss.NewStyle().
 		Foreground(lipgloss.AdaptiveColor{Light: "#eff1f5", Dark: "#1e1e2e"}).
 		Background(lipgloss.AdaptiveColor{Light: "#fe640b", Dark: "#fab387"})
+	t.HintLabel = lipgloss.NewStyle().Bold(true).
+		Foreground(lipgloss.AdaptiveColor{Light: "#eff1f5", Dark: "#11111b"}).
+		Background(lipgloss.AdaptiveColor{Light: "#d20f39", Dark: "#f38ba8"})
 	t.Chroma = styles.Get("catppuccin-mocha")
 	return t
 }
@@ -77,7 +81,7 @@ func Plain() Theme {
 	t.Emph, t.Strong, t.Strike, t.CodeSpan, t.CodeBlock = s, s, s, s, s
 	t.Link, t.Image, t.QuoteBar, t.ListMarker = s, s, s, s
 	t.TableBorder, t.TableHeader, t.Rule, t.Dim, t.StatusBar = s, s, s, s, s
-	t.SearchHit, t.SearchCurrent = s, s
+	t.SearchHit, t.SearchCurrent, t.HintLabel = s, s, s
 	t.Chroma = styles.Fallback
 	return t
 }

@@ -37,7 +37,7 @@ func testDoc() string {
 
 func newTestModel(t *testing.T, w, h int) Model {
 	t.Helper()
-	m := New(parser.Parse([]byte(testDoc())), theme.Plain(), "test.md")
+	m := New(parser.Parse([]byte(testDoc())), theme.Plain(), "test.md", "")
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	return mm.(Model)
 }

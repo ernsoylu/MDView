@@ -95,10 +95,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `n` / `N` | next / previous match (wraps) |
 | `t` | TOC popup (type to fuzzy-filter; `Enter` jump, `Esc` close) |
 | `Esc` | clear search highlights |
+| `f` | link hints: overlay labels, type one to follow (mouse click also follows) |
+| `Ctrl+O` / `Tab` | jumplist back / forward (`Ctrl+I` arrives as Tab in terminals) |
+| `e` / `i` | suspend and edit at the current line via `$EDITOR` (default `vim +N`) |
 | `?` | toggle help overlay |
 | `q` / `Ctrl+C` | quit |
 
-Reserved for later: `f` (link hints), `Ctrl+O`/`Ctrl+I` (jumplist), `e`/`i` (editor), `y` (yank code block).
+Reserved for later: `y` (yank code block).
 
 ---
 
@@ -144,7 +147,7 @@ Future packages (`internal/nav`, `internal/img`, `internal/editor`) are created 
 
 - [x] **v0.1 — read-only pager:** GFM parse; styled-line IR with source mapping; wrap/lists/quotes/tables/task lists; chroma syntax highlighting; adaptive default theme + Plain; alt-screen pager with keymap + wheel; status bar; help overlay; resize re-anchoring; stdin + piped dump modes; OSC 8; golden/unit/fuzz/bench tests; CI.
 - [x] **v0.2 — search + TOC:** incremental `/` with `n`/`N` and match highlighting; fuzzy TOC popup jump.
-- [ ] **v0.3 — links & flow:** hint mode + mouse follow; unified jumplist (`Ctrl+O`/`Ctrl+I`); relative-doc + GitHub-slug anchor resolution; `xdg-open` for URLs; `e` editor integration via `vim +N`; watch mode.
+- [x] **v0.3 — links & flow:** hint mode + mouse follow; unified jumplist (`Ctrl+O`/`Ctrl+I`); relative-doc + GitHub-slug anchor resolution; `xdg-open` for URLs; `e` editor integration via `vim +N`; watch mode.
 - [ ] **v0.4 — images:** half-block mosaic fallback; Kitty protocol with Unicode placeholders.
 - [ ] **v0.5 — LaTeX math:** `$`/`$$` goldmark extension; go-latex/latex rendering through the image pipeline; raw-TeX fallback.
 - [ ] **v1.0 — polish:** external YAML themes; per-file reading-position persistence (XDG state dir); `y` yank code block via OSC 52; `--width` flag; goreleaser + man page.

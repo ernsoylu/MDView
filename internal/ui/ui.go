@@ -1,15 +1,20 @@
 // Package ui is the full-screen pager: a viewport over the rendered lines
-// with vim-style keys, mouse wheel, incremental search, a fuzzy TOC jump,
+// with vim-style keys, mouse support, incremental search, a fuzzy TOC jump,
+// link following with hints and a jumplist, editor integration, watch mode,
 // a status bar, and a help overlay.
 package ui
 
 import (
 	"fmt"
+	"os/exec"
+	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/fsnotify/fsnotify"
 	"github.com/mattn/go-runewidth"
 
+	"github.com/ernsoylu/MDView/internal/nav"
 	"github.com/ernsoylu/MDView/internal/parser"
 	"github.com/ernsoylu/MDView/internal/render"
 	"github.com/ernsoylu/MDView/internal/theme"
@@ -27,6 +32,10 @@ const helpText = `mdv — keys
   t              table of contents (type to filter)
   esc            clear search / close overlay
 
+  f              follow link (type its label; click works too)
+  ctrl+o / tab   jump back / forward
+  e / i          edit at current line ($EDITOR, default vim)
+
   ?              toggle this help
   q / ctrl+c     quit`
 
@@ -37,22 +46,30 @@ const (
 	modeHelp
 	modeSearch
 	modeTOC
+	modeHints
 )
 
 type Model struct {
 	doc  *parser.Doc
 	th   theme.Theme
 	name string
+	path string // absolute path of the current file; "" when reading stdin
 
 	lines    []render.Line
 	rendered []string
 	plain    []string
 	outline  []render.OutlineEntry
+	anchors  map[string]int
 
 	width, height int
 	offset        int
 	mode          mode
 	ready         bool
+	flash         string // transient status-bar message, cleared on keypress
+
+	jump    nav.Jumplist
+	watcher *fsnotify.Watcher
+	opener  func(string) error // external opener, replaceable in tests
 
 	// search
 	query        string
@@ -65,30 +82,65 @@ type Model struct {
 	tocQuery string
 	tocSel   int
 	filtered []int // indices into outline, ranked
+
+	// link hints
+	hints      []hint
+	hintPrefix string
 }
 
-func New(doc *parser.Doc, th theme.Theme, name string) Model {
-	return Model{doc: doc, th: th, name: name, outline: render.Outline(doc), cur: -1}
+func New(doc *parser.Doc, th theme.Theme, name, path string) Model {
+	m := Model{doc: doc, th: th, name: name, path: path, outline: render.Outline(doc), cur: -1}
+	m.anchors = nav.Anchors(m.outline)
+	m.opener = func(target string) error { return exec.Command("xdg-open", target).Start() }
+	if path != "" {
+		if w, err := fsnotify.NewWatcher(); err == nil {
+			if w.Add(filepath.Dir(path)) == nil {
+				m.watcher = w
+			} else {
+				_ = w.Close()
+			}
+		}
+	}
+	return m
 }
 
-func (m Model) Init() tea.Cmd { return nil }
+func (m Model) Init() tea.Cmd { return m.watchCmd() }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.reflow()
+	case flashMsg:
+		m.flash = string(msg)
+	case editorDoneMsg:
+		if msg.err != nil {
+			m.flash = "editor: " + msg.err.Error()
+		}
+		m.reload()
+	case fileChangedMsg:
+		if m.path != "" && filepath.Base(msg.name) == filepath.Base(m.path) {
+			m.reload()
+		}
+		return m, m.watchCmd()
 	case tea.MouseMsg:
 		if m.mode == modeTOC {
 			return m, nil
 		}
-		switch msg.Button {
-		case tea.MouseButtonWheelUp:
+		switch {
+		case msg.Button == tea.MouseButtonWheelUp:
 			m.scroll(-3)
-		case tea.MouseButtonWheelDown:
+		case msg.Button == tea.MouseButtonWheelDown:
 			m.scroll(3)
+		case msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && m.mode == modeNormal:
+			if idx := m.offset + msg.Y; idx < len(m.lines) && msg.X >= 1 {
+				if url := linkAtCell(m.lines[idx], msg.X-1); url != "" {
+					return m, m.followLink(url)
+				}
+			}
 		}
 	case tea.KeyMsg:
+		m.flash = ""
 		if msg.Type == tea.KeyCtrlC {
 			return m, tea.Quit
 		}
@@ -97,6 +149,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateSearch(msg)
 		case modeTOC:
 			return m.updateTOC(msg)
+		case modeHints:
+			return m.updateHints(msg)
 		case modeHelp:
 			switch msg.String() {
 			case "q":
@@ -127,6 +181,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tocQuery = ""
 			m.tocSel = 0
 			m.refilterTOC()
+		case "f":
+			m.startHints()
+		case "ctrl+o":
+			if p, ok := m.jump.Back(m.posHere()); ok {
+				m.restore(p)
+			} else {
+				m.flash = "at oldest jump"
+			}
+		case "tab": // terminals send Ctrl+I as Tab
+			if p, ok := m.jump.Forward(m.posHere()); ok {
+				m.restore(p)
+			} else {
+				m.flash = "at newest jump"
+			}
+		case "e", "i":
+			if cmd := m.editorCmd(); cmd != nil {
+				return m, cmd
+			}
 		case "j", "down":
 			m.scroll(1)
 		case "k", "up":
@@ -177,16 +249,38 @@ func (m Model) View() string {
 }
 
 // renderLine returns the ANSI string for one rendered line, overlaying
-// search highlights when the line has matches.
+// search highlights and hint labels as needed.
 func (m Model) renderLine(idx int) string {
 	ranges := m.lineRanges[idx]
-	if len(ranges) == 0 {
+	hasHint := false
+	if m.mode == modeHints {
+		for _, h := range m.hints {
+			if h.line == idx {
+				hasHint = true
+				break
+			}
+		}
+	}
+	if len(ranges) == 0 && !hasHint {
 		return m.rendered[idx]
 	}
-	ln := m.lines[idx].Highlight(ranges, &m.th.SearchHit)
-	if m.cur >= 0 {
-		if mt := m.matches[m.cur]; mt.line == idx {
-			ln = ln.Highlight([][2]int{{mt.start, mt.end}}, &m.th.SearchCurrent)
+	ln := m.lines[idx]
+	if len(ranges) > 0 {
+		ln = ln.Highlight(ranges, &m.th.SearchHit)
+		if m.cur >= 0 {
+			if mt := m.matches[m.cur]; mt.line == idx {
+				ln = ln.Highlight([][2]int{{mt.start, mt.end}}, &m.th.SearchCurrent)
+			}
+		}
+	}
+	if hasHint {
+		// Overlay right-to-left so earlier byte offsets stay valid.
+		for i := len(m.hints) - 1; i >= 0; i-- {
+			h := m.hints[i]
+			if h.line != idx || !strings.HasPrefix(h.label, m.hintPrefix) {
+				continue
+			}
+			ln = overlayLabel(ln, h.at, h.label, &m.th.HintLabel)
 		}
 	}
 	return ln.String()
@@ -217,12 +311,13 @@ func (m *Model) scroll(delta int) {
 	}
 }
 
-// jumpToSourceLine scrolls the first rendered line at or after the given
-// source line to the top of the viewport.
+// jumpToSourceLine scrolls the first content line at or after the given
+// source line to the top of the viewport. Blank separator lines share the
+// following block's source line and are skipped, so anchoring round-trips.
 func (m *Model) jumpToSourceLine(src int) {
 	m.offset = m.maxOffset()
 	for i, ln := range m.lines {
-		if ln.SourceLine >= src {
+		if ln.SourceLine >= src && len(ln.Spans) > 0 {
 			m.offset = i
 			break
 		}
@@ -235,12 +330,7 @@ func (m *Model) jumpToSourceLine(src int) {
 func (m *Model) reflow() {
 	anchor := 0
 	if m.ready {
-		for i := m.offset; i < len(m.lines); i++ {
-			if sl := m.lines[i].SourceLine; sl > 0 {
-				anchor = sl
-				break
-			}
-		}
+		anchor = m.topSourceLine()
 	}
 	w := m.width - 2
 	if w > 120 {
@@ -271,6 +361,8 @@ func (m Model) statusView() string {
 			sel = m.tocSel + 1
 		}
 		return m.statusLine(" contents", fmt.Sprintf("%d/%d · enter jump · esc close ", sel, len(m.filtered)))
+	case modeHints:
+		return m.statusLine(" follow: "+m.hintPrefix, "type a label · esc cancel ")
 	}
 	var pos string
 	switch {
@@ -291,7 +383,11 @@ func (m Model) statusView() string {
 			right = "[no matches]  " + right
 		}
 	}
-	return m.statusLine(" "+m.name+"  ", right)
+	left := " " + m.name + "  "
+	if m.flash != "" {
+		left = " " + m.flash + "  "
+	}
+	return m.statusLine(left, right)
 }
 
 func (m Model) statusLine(left, right string) string {

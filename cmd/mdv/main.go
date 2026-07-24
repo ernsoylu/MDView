@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -20,12 +21,15 @@ func main() {
 	stdinPiped := !term.IsTerminal(int(os.Stdin.Fd()))
 
 	var src []byte
-	var name string
+	var name, path string
 	var err error
 	switch {
 	case len(args) == 1 && args[0] != "-":
 		src, err = os.ReadFile(args[0])
 		name = args[0]
+		if abs, aerr := filepath.Abs(args[0]); aerr == nil {
+			path = abs
+		}
 	case len(args) == 1 || (len(args) == 0 && stdinPiped):
 		src, err = io.ReadAll(os.Stdin)
 		name = "(stdin)"
@@ -58,7 +62,7 @@ func main() {
 	if stdinPiped {
 		opts = append(opts, tea.WithInputTTY())
 	}
-	if _, err := tea.NewProgram(ui.New(doc, th, name), opts...).Run(); err != nil {
+	if _, err := tea.NewProgram(ui.New(doc, th, name, path), opts...).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "mdv:", err)
 		os.Exit(1)
 	}
