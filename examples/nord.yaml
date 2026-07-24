@@ -1,0 +1,20 @@
+# A Nord-flavored mdv theme. Try it:
+#   mdv --theme examples/nord.yaml examples/demo.md
+heading1: { fg: "#88c0d0", bold: true, underline: true }
+heading2: { fg: "#81a1c1", bold: true }
+heading3: { fg: "#8fbcbb", bold: true }
+heading4: { fg: "#5e81ac", bold: true }
+heading5: { fg: "#d8dee9", bold: true }
+heading6: { fg: "#d8dee9", bold: true, italic: true }
+codespan: { fg: "#d08770" }
+link: { fg: "#88c0d0", underline: true }
+image: { fg: "#b48ead", italic: true }
+quotebar: { fg: "#a3be8c" }
+listmarker: { fg: "#b48ead" }
+tableborder: { fg: "#4c566a" }
+tableheader: { bold: true }
+rule: { fg: "#4c566a" }
+searchhit: { fg: "#2e3440", bg: "#ebcb8b" }
+searchcurrent: { fg: "#2e3440", bg: "#d08770" }
+hintlabel: { fg: "#2e3440", bg: "#bf616a", bold: true }
+chroma: nord

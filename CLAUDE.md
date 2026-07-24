@@ -56,7 +56,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Stack:** `bubbletea` (alt screen, resize, mouse) + `lipgloss` (styling). Full-screen on `mdv <file.md>`.
 - **Chrome:** one-row status bar (filename, scroll position, key hints) and a `?` help overlay.
 - **Resize:** re-render at the new width, then re-anchor the viewport to the source line that was previously at the top (via the IR's source mapping).
-- **Color handling:** truecolor→256→16→mono degradation and `NO_COLOR` come free from lipgloss/termenv profiles; the default theme uses `AdaptiveColor` for light/dark backgrounds. External JSON/YAML theme files: v1.0.
+- **Color handling:** truecolor→256→16→mono degradation and `NO_COLOR` come free from lipgloss/termenv profiles; the default theme uses `AdaptiveColor` for light/dark backgrounds.
+- **External themes (implemented v1.0):** `--theme` takes `default`, `plain`, or a YAML file path; keys (`heading1`…`heading6`, `emph`, `codespan`, `link`, …, `chroma`) overlay the default theme wholesale per key, unknown keys are errors. See `examples/nord.yaml`.
 - **Width:** content width = terminal width − 2, capped at 120 columns; piped output uses `$COLUMNS` or 80.
 - **UTF-8 Symbols:** list bullets by depth (`•`, `◦`, `▪`), quote borders (`│`), checkboxes (`[✓]`, `[ ]`), table borders (`┌ ┬ ┐ ├ ┼ ┤ └ ┴ ┘ ─ │`), thematic break (`─`).
 - **Wide content:** long code lines chunk-wrap and over-wide tables shrink+truncate cells with `…`; horizontal scrolling is an open question for later.
@@ -98,17 +99,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `f` | link hints: overlay labels, type one to follow (mouse click also follows) |
 | `Ctrl+O` / `Tab` | jumplist back / forward (`Ctrl+I` arrives as Tab in terminals) |
 | `e` / `i` | suspend and edit at the current line via `$EDITOR` (default `vim +N`) |
+| `y` | yank the nearest code block to the clipboard (OSC 52) |
 | `?` | toggle help overlay |
-| `q` / `Ctrl+C` | quit |
-
-Reserved for later: `y` (yank code block).
+| `q` / `Ctrl+C` | quit (persists reading position) |
 
 ---
 
 ## Part 3: Go Development Commands & Conventions
 
 ### Core Commands
-- **Run App:** `go run ./cmd/mdv <path/to/file.md>` (also accepts stdin: `cat notes.md | go run ./cmd/mdv`)
+- **Run App:** `go run ./cmd/mdv <path/to/file.md>` (also accepts stdin: `cat notes.md | go run ./cmd/mdv`). Flags: `--theme <default|plain|file.yaml>`, `--width <n>`, `--version`.
 - **Build Binary:** `go build -ldflags="-s -w" -o bin/mdv ./cmd/mdv`
 - **Run All Tests:** `go test -race ./...`
 - **Run Specific Test:** `go test -v -run TestFunctionName ./path/to/pkg`
@@ -139,7 +139,7 @@ Future packages (`internal/nav`, `internal/img`, `internal/editor`) are created 
 - Spans carry `*lipgloss.Style` pointers into the theme, never style values — copying styles by value made GC dominate render time (3× slowdown). Keep it that way.
 
 ### CI
-`.github/workflows/ci.yml` runs gofmt -s check, `go vet`, `go test -race`, and golangci-lint on every push/PR. Release tooling (goreleaser, brew tap, man page) arrives with v1.0.
+`.github/workflows/ci.yml` runs gofmt -s check, `go vet`, `go test -race`, and golangci-lint on every push/PR. Pushing a `v*` tag triggers `.github/workflows/release.yml`, which runs goreleaser (`.goreleaser.yaml`: linux/darwin/windows × amd64/arm64, version stamped via `-X main.version`, archives include `docs/mdv.1` and `examples/`). The RTK shell wrapper can swallow tool exit codes — gate release-critical checks with `rtk proxy <cmd>`.
 
 ---
 
@@ -150,5 +150,5 @@ Future packages (`internal/nav`, `internal/img`, `internal/editor`) are created 
 - [x] **v0.3 — links & flow:** hint mode + mouse follow; unified jumplist (`Ctrl+O`/`Ctrl+I`); relative-doc + GitHub-slug anchor resolution; `xdg-open` for URLs; `e` editor integration via `vim +N`; watch mode.
 - [x] **v0.4 — images:** half-block mosaic fallback; Kitty protocol with Unicode placeholders.
 - [x] **v0.5 — LaTeX math:** `$`/`$$` goldmark extension; go-latex/latex rendering through the image pipeline; raw-TeX fallback.
-- [ ] **v1.0 — polish:** external YAML themes; per-file reading-position persistence (XDG state dir); `y` yank code block via OSC 52; `--width` flag; goreleaser + man page.
+- [x] **v1.0 — polish:** external YAML themes; per-file reading-position persistence (XDG state dir); `y` yank code block via OSC 52; `--width` flag; goreleaser + man page.
 - **Backlog:** section folding (`za`/`zR`/`zM`), Sixel/iTerm2 images, remote image fetching, footnotes, regex search, horizontal scroll for wide content, lazy viewport syntax highlighting.

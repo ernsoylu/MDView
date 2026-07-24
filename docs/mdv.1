@@ -1,0 +1,75 @@
+.TH MDV 1 "July 2026" "mdv 1.0" "User Commands"
+.SH NAME
+mdv \- full-screen terminal Markdown viewer
+.SH SYNOPSIS
+.B mdv
+[\fIflags\fR] \fIfile.md\fR
+.br
+.I command
+|
+.B mdv
+.SH DESCRIPTION
+.B mdv
+renders CommonMark + GFM Markdown full-screen in the terminal: syntax-highlighted
+code, box-drawing tables, incremental search, a fuzzy table-of-contents jump,
+link following with vimium-style hints and a jumplist, images (half-block mosaic
+anywhere, kitty graphics in kitty/ghostty), LaTeX display math, live reload on
+file change, and external editing at the current line.
+.PP
+When standard output is not a terminal, the rendered document is written as
+plain text instead.
+.SH OPTIONS
+.TP
+.BI \-theme " name"
+.BR default ,
+.BR plain ,
+or a path to a YAML theme file whose keys overlay the default theme.
+.TP
+.BI \-width " n"
+Maximum content width in columns (default: terminal width, capped at 120).
+.TP
+.B \-version
+Print the version and exit.
+.SH KEYS
+.TP
+.B j/k, d/u, space/b, g/G
+Scroll: line, half page, page, top/bottom. The mouse wheel works too.
+.TP
+.B /
+Incremental search (smart-case; enter keeps, esc cancels), then
+.B n/N
+between matches.
+.TP
+.B t
+Table of contents; type to fuzzy-filter, enter jumps.
+.TP
+.B f
+Link hints: type the overlaid label to follow. Clicking a link follows it as
+well. Anchors and relative .md links open in mdv; everything else opens via
+.BR xdg-open (1).
+.TP
+.B ctrl+o / tab
+Jumplist back / forward, across documents.
+.TP
+.B e, i
+Suspend and edit the file at the current line with \fB$EDITOR\fR (default vim).
+.TP
+.B y
+Copy the nearest code block to the clipboard (OSC 52).
+.TP
+.B ?, q
+Help overlay; quit.
+.SH ENVIRONMENT
+.TP
+.B EDITOR
+Editor for the e/i binding.
+.TP
+.B NO_COLOR
+Disables styling.
+.TP
+.B XDG_STATE_HOME
+Reading positions persist under \fI$XDG_STATE_HOME/mdv/positions.json\fR
+(default \fI~/.local/state/mdv/\fR).
+.SH SEE ALSO
+.BR glow (1),
+.BR less (1)

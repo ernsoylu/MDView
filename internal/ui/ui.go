@@ -22,6 +22,7 @@ import (
 	"github.com/ernsoylu/MDView/internal/nav"
 	"github.com/ernsoylu/MDView/internal/parser"
 	"github.com/ernsoylu/MDView/internal/render"
+	"github.com/ernsoylu/MDView/internal/state"
 	"github.com/ernsoylu/MDView/internal/theme"
 )
 
@@ -40,6 +41,7 @@ const helpText = `mdv — keys
   f              follow link (type its label; click works too)
   ctrl+o / tab   jump back / forward
   e / i          edit at current line ($EDITOR, default vim)
+  y              yank nearest code block to the clipboard
 
   ?              toggle this help
   q / ctrl+c     quit`
@@ -80,6 +82,11 @@ type Model struct {
 	imgIDs    *img.Registry
 	pendingTx []string // kitty transmissions awaiting a write to the tty
 
+	store       *state.Store // reading-position persistence; nil disables
+	restoreLine int          // saved position to apply on the next reflow
+	maxWidth    int          // content width cap
+	codeBlocks  []render.CodeBlock
+
 	// search
 	query        string
 	matches      []match
@@ -103,6 +110,8 @@ func New(doc *parser.Doc, th theme.Theme, name, path string) Model {
 	m.opener = func(target string) error { return exec.Command("xdg-open", target).Start() }
 	m.imageMode = detectImages()
 	m.imgIDs = img.NewRegistry()
+	m.maxWidth = 120
+	m.codeBlocks = render.CodeBlocks(doc)
 	if path != "" {
 		if w, err := fsnotify.NewWatcher(); err == nil {
 			if w.Add(filepath.Dir(path)) == nil {
@@ -116,6 +125,33 @@ func New(doc *parser.Doc, th theme.Theme, name, path string) Model {
 }
 
 func (m Model) Init() tea.Cmd { return m.watchCmd() }
+
+// WithStore attaches the reading-position store and queues restoring this
+// document's saved position on the first layout.
+func (m Model) WithStore(s *state.Store) Model {
+	m.store = s
+	if m.path != "" {
+		m.restoreLine = s.Get(m.path)
+	}
+	return m
+}
+
+// WithMaxWidth caps the content width (default 120 columns).
+func (m Model) WithMaxWidth(w int) Model {
+	if w > 0 {
+		m.maxWidth = w
+	}
+	return m
+}
+
+// quitCmd persists the reading position and exits.
+func (m Model) quitCmd() tea.Cmd {
+	if m.store != nil && m.path != "" {
+		m.store.Set(m.path, m.topSourceLine())
+		_ = m.store.Save()
+	}
+	return tea.Quit
+}
 
 // detectImages picks the best image path for this terminal: kitty graphics
 // where advertised, half-block mosaic on any color terminal, off when mono
@@ -198,7 +234,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		m.flash = ""
 		if msg.Type == tea.KeyCtrlC {
-			return m, tea.Quit
+			return m, m.quitCmd()
 		}
 		switch m.mode {
 		case modeSearch:
@@ -210,7 +246,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case modeHelp:
 			switch msg.String() {
 			case "q":
-				return m, tea.Quit
+				return m, m.quitCmd()
 			case "?", "esc":
 				m.mode = modeNormal
 			}
@@ -218,7 +254,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch msg.String() {
 		case "q":
-			return m, tea.Quit
+			return m, m.quitCmd()
 		case "?":
 			m.mode = modeHelp
 		case "esc":
@@ -253,6 +289,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "e", "i":
 			if cmd := m.editorCmd(); cmd != nil {
+				return m, cmd
+			}
+		case "y":
+			if cmd := m.yank(); cmd != nil {
 				return m, cmd
 			}
 		case "j", "down":
@@ -389,8 +429,8 @@ func (m *Model) reflow() {
 		anchor = m.topSourceLine()
 	}
 	w := m.width - 2
-	if w > 120 {
-		w = 120
+	if w > m.maxWidth {
+		w = m.maxWidth
 	}
 	opts := render.Options{Images: m.imageMode, IDs: m.imgIDs}
 	if m.path != "" {
@@ -408,6 +448,10 @@ func (m *Model) reflow() {
 	m.ready = true
 	if anchor > 0 {
 		m.jumpToSourceLine(anchor)
+	}
+	if m.restoreLine > 0 {
+		m.jumpToSourceLine(m.restoreLine)
+		m.restoreLine = 0
 	}
 	m.scroll(0)
 	m.refreshSearch(false)

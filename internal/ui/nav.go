@@ -62,14 +62,21 @@ func (m *Model) loadFile(path string) error {
 	if err != nil {
 		return err
 	}
+	if m.store != nil && m.path != "" {
+		m.store.Set(m.path, m.topSourceLine())
+	}
 	m.path = path
 	m.name = path
 	m.doc = parser.Parse(src)
 	m.outline = render.Outline(m.doc)
 	m.anchors = nav.Anchors(m.outline)
+	m.codeBlocks = render.CodeBlocks(m.doc)
 	m.clearSearch()
 	m.offset = 0
 	m.ready = false // reflow must not anchor to the previous document
+	if m.store != nil {
+		m.restoreLine = m.store.Get(path)
+	}
 	m.reflow()
 	if m.watcher != nil {
 		_ = m.watcher.Add(filepath.Dir(path))
@@ -88,6 +95,7 @@ func (m *Model) reload() {
 	m.doc = parser.Parse(src)
 	m.outline = render.Outline(m.doc)
 	m.anchors = nav.Anchors(m.outline)
+	m.codeBlocks = render.CodeBlocks(m.doc)
 	m.reflow()
 }
 

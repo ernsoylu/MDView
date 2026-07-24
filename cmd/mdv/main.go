@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -12,12 +13,29 @@ import (
 
 	"github.com/ernsoylu/MDView/internal/parser"
 	"github.com/ernsoylu/MDView/internal/render"
+	"github.com/ernsoylu/MDView/internal/state"
 	"github.com/ernsoylu/MDView/internal/theme"
 	"github.com/ernsoylu/MDView/internal/ui"
 )
 
+// version is stamped by goreleaser via -ldflags.
+var version = "dev"
+
 func main() {
-	args := os.Args[1:]
+	themeFlag := flag.String("theme", "default", "theme: default, plain, or a path to a YAML theme file")
+	widthFlag := flag.Int("width", 0, "maximum content width in columns (0 = terminal width, capped at 120)")
+	versionFlag := flag.Bool("version", false, "print version and exit")
+	flag.Usage = func() {
+		fmt.Fprintln(os.Stderr, "usage: mdv [flags] <file.md>   (or pipe markdown on stdin)")
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+	if *versionFlag {
+		fmt.Println("mdv", version)
+		return
+	}
+
+	args := flag.Args()
 	stdinPiped := !term.IsTerminal(int(os.Stdin.Fd()))
 
 	var src []byte
@@ -34,7 +52,7 @@ func main() {
 		src, err = io.ReadAll(os.Stdin)
 		name = "(stdin)"
 	default:
-		fmt.Fprintln(os.Stderr, "usage: mdv <file.md>   (or pipe markdown on stdin)")
+		flag.Usage()
 		os.Exit(2)
 	}
 	if err != nil {
@@ -42,15 +60,22 @@ func main() {
 		os.Exit(1)
 	}
 
+	th, err := resolveTheme(*themeFlag)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "mdv:", err)
+		os.Exit(1)
+	}
 	doc := parser.Parse(src)
-	th := theme.Default()
 
 	// Not a terminal: dump the rendered document and exit. The mono color
 	// profile strips styling and OSC 8 automatically in this case.
 	if !term.IsTerminal(int(os.Stdout.Fd())) {
 		width := 80
-		if c, err := strconv.Atoi(os.Getenv("COLUMNS")); err == nil && c > 0 {
+		if c, cerr := strconv.Atoi(os.Getenv("COLUMNS")); cerr == nil && c > 0 {
 			width = c
+		}
+		if *widthFlag > 0 {
+			width = *widthFlag
 		}
 		for _, ln := range render.Render(doc, th, width) {
 			fmt.Println(ln.String())
@@ -58,12 +83,27 @@ func main() {
 		return
 	}
 
+	m := ui.New(doc, th, name, path).WithStore(state.Open())
+	if *widthFlag > 0 {
+		m = m.WithMaxWidth(*widthFlag)
+	}
 	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}
 	if stdinPiped {
 		opts = append(opts, tea.WithInputTTY())
 	}
-	if _, err := tea.NewProgram(ui.New(doc, th, name, path), opts...).Run(); err != nil {
+	if _, err := tea.NewProgram(m, opts...).Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "mdv:", err)
 		os.Exit(1)
+	}
+}
+
+func resolveTheme(name string) (theme.Theme, error) {
+	switch name {
+	case "default":
+		return theme.Default(), nil
+	case "plain":
+		return theme.Plain(), nil
+	default:
+		return theme.Load(name)
 	}
 }
