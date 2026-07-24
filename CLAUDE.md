@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 **Name:** `mdv` (MDView)
-**Language:** Go (Golang 1.22+)
+**Language:** Go (Golang 1.25+, per go.mod; older local toolchains auto-download it)
 **Module:** `github.com/ernsoylu/MDView`
 **Purpose:** A high-performance, full-screen terminal Markdown viewer built on the [CommonMark 0.31.2 specification](https://spec.commonmark.org/0.31.2/) **plus GFM extensions** (see Part 2 §1).
 **Core Philosophy:** Fast terminal rendering, rich visual theming, seamless navigation, and lean external editor integration without bloating the binary with custom editing engines.
@@ -128,7 +128,8 @@ Future packages (`internal/nav`, `internal/img`, `internal/editor`) are created 
 ### Testing Conventions
 - Golden tests always use `theme.Plain()` (no ANSI, no OSC 8) so files stay readable and deterministic.
 - Renderer invariants: no `\n` inside a `Line`; rendered width ≤ requested width (fuzz asserts no panics).
-- **Performance budget:** parse+render of a 200 KB document must stay **under 100 ms** (`BenchmarkRender` tracks this; don't gate CI on it).
+- **Performance budget:** parse+render of a 200 KB document must stay **under 100 ms** (`BenchmarkRenderProse` tracks this; don't gate CI on it). Currently ~47 ms. The budget covers prose-dominated documents: chroma tokenization dominates on pathologically code-dense input (`BenchmarkRender`, 1200 snippets, ~227 ms) — lazy viewport highlighting is the backlog lever if that ever matters in practice.
+- Spans carry `*lipgloss.Style` pointers into the theme, never style values — copying styles by value made GC dominate render time (3× slowdown). Keep it that way.
 
 ### CI
 `.github/workflows/ci.yml` runs gofmt -s check, `go vet`, `go test -race`, and golangci-lint on every push/PR. Release tooling (goreleaser, brew tap, man page) arrives with v1.0.
@@ -137,10 +138,10 @@ Future packages (`internal/nav`, `internal/img`, `internal/editor`) are created 
 
 ## Part 4: Roadmap & Status
 
-- [ ] **v0.1 — read-only pager:** GFM parse; styled-line IR with source mapping; wrap/lists/quotes/tables/task lists; chroma syntax highlighting; adaptive default theme + Plain; alt-screen pager with keymap + wheel; status bar; help overlay; resize re-anchoring; stdin + piped dump modes; OSC 8; golden/unit/fuzz/bench tests; CI.
+- [x] **v0.1 — read-only pager:** GFM parse; styled-line IR with source mapping; wrap/lists/quotes/tables/task lists; chroma syntax highlighting; adaptive default theme + Plain; alt-screen pager with keymap + wheel; status bar; help overlay; resize re-anchoring; stdin + piped dump modes; OSC 8; golden/unit/fuzz/bench tests; CI.
 - [ ] **v0.2 — search + TOC:** incremental `/` with `n`/`N` and match highlighting; fuzzy TOC popup jump.
 - [ ] **v0.3 — links & flow:** hint mode + mouse follow; unified jumplist (`Ctrl+O`/`Ctrl+I`); relative-doc + GitHub-slug anchor resolution; `xdg-open` for URLs; `e` editor integration via `vim +N`; watch mode.
 - [ ] **v0.4 — images:** half-block mosaic fallback; Kitty protocol with Unicode placeholders.
 - [ ] **v0.5 — LaTeX math:** `$`/`$$` goldmark extension; go-latex/latex rendering through the image pipeline; raw-TeX fallback.
 - [ ] **v1.0 — polish:** external YAML themes; per-file reading-position persistence (XDG state dir); `y` yank code block via OSC 52; `--width` flag; goreleaser + man page.
-- **Backlog:** section folding (`za`/`zR`/`zM`), Sixel/iTerm2 images, footnotes, regex search, horizontal scroll for wide content.
+- **Backlog:** section folding (`za`/`zR`/`zM`), Sixel/iTerm2 images, footnotes, regex search, horizontal scroll for wide content, lazy viewport syntax highlighting.

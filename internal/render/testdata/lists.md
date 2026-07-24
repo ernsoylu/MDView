@@ -1,0 +1,18 @@
+- first item with enough text to wrap the line
+- second
+  - nested child item
+    - deeper nested child
+- [ ] open task
+- [x] done task
+
+1. one
+2. two
+3. three
+
+Loose list:
+
+- loose one
+
+- loose two with a second paragraph
+
+  second paragraph of loose two
