@@ -117,7 +117,11 @@ modern terminal, or press `f` and type a label to follow one. This
 come back with `Ctrl+O`, go forward again with `Tab`. This one is long enough to chunk across lines:
 https://example.com/a/very/long/path/segment/that/cannot/possibly/fit/on/a/single/terminal/line/anywhere
 
-Images render as placeholders until v0.4:
+A local image on its own paragraph renders in the terminal — half-block
+mosaic anywhere, real pixels in kitty/ghostty (note the transparent
+corner). Remote images stay placeholders:
+
+![A gradient with a transparent corner](gradient.png)
 
 ![The mdv logo, eventually](https://example.com/mdv.png)
 

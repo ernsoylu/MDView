@@ -12,20 +12,48 @@ import (
 	extast "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
 
+	"github.com/ernsoylu/MDView/internal/img"
 	"github.com/ernsoylu/MDView/internal/parser"
 	"github.com/ernsoylu/MDView/internal/theme"
 )
 
-type renderer struct {
-	doc        *parser.Doc
-	src        []byte
-	th         theme.Theme
-	listDepth  int
-	styleCache map[chroma.TokenType]*lipgloss.Style
+// ImageMode selects how image-only paragraphs render.
+type ImageMode int
+
+const (
+	ImagesOff       ImageMode = iota // inline placeholder text only
+	ImagesHalfblock                  // ▀-mosaic cells, any color terminal
+	ImagesKitty                      // kitty graphics with Unicode placeholders
+)
+
+// Options extends Render with image support.
+type Options struct {
+	BaseDir      string    // directory for resolving relative image paths; "" disables file images
+	Images       ImageMode
+	MaxImageRows int           // cap on image height in cells; 0 means 24
+	IDs          *img.Registry // required for ImagesKitty
 }
 
-// Render lays out a parsed document at the given width.
+type renderer struct {
+	doc           *parser.Doc
+	src           []byte
+	th            theme.Theme
+	listDepth     int
+	styleCache    map[chroma.TokenType]*lipgloss.Style
+	opts          Options
+	transmissions []string
+}
+
+// Render lays out a parsed document at the given width, images disabled.
 func Render(doc *parser.Doc, th theme.Theme, width int) []Line {
+	lines, _ := RenderDoc(doc, th, width, Options{})
+	return lines
+}
+
+// RenderDoc lays out a parsed document at the given width. The second
+// return value holds kitty graphics transmissions for images placed this
+// render; the caller writes them to the terminal once.
+func RenderDoc(doc *parser.Doc, th theme.Theme, width int, opts Options) ([]Line, []string) {
 	if width < 8 {
 		width = 8
 	}
@@ -34,8 +62,9 @@ func Render(doc *parser.Doc, th theme.Theme, width int) []Line {
 		src:        doc.Source,
 		th:         th,
 		styleCache: make(map[chroma.TokenType]*lipgloss.Style),
+		opts:       opts,
 	}
-	return r.blocks(doc.Root, width, false)
+	return r.blocks(doc.Root, width, false), r.transmissions
 }
 
 // blocks renders the block children of parent, separated by blank lines
@@ -60,6 +89,11 @@ func (r *renderer) block(n ast.Node, width int) []Line {
 	case *ast.Heading:
 		return wrap(r.inlines(n, &r.th.Heading[n.Level-1]), width, nodeLine(r.doc, n))
 	case *ast.Paragraph:
+		if im := soleImage(n); im != nil {
+			if lines := r.imageBlock(im, width); lines != nil {
+				return lines
+			}
+		}
 		return wrap(r.inlines(n, nil), width, nodeLine(r.doc, n))
 	case *ast.TextBlock:
 		return wrap(r.inlines(n, nil), width, nodeLine(r.doc, n))
@@ -285,8 +319,10 @@ func nodeLine(doc *parser.Doc, n ast.Node) int {
 	if t, ok := n.(*ast.Text); ok {
 		return doc.LineOf(t.Segment.Start)
 	}
-	if lb, ok := n.(interface{ Lines() *text.Segments }); ok && lb.Lines().Len() > 0 {
-		sg := lb.Lines().At(0)
+	// Lines() is only valid on block nodes: goldmark's BaseInline "implements"
+	// it with a panic.
+	if n.Type() == ast.TypeBlock && n.Lines().Len() > 0 {
+		sg := n.Lines().At(0)
 		return doc.LineOf(sg.Start)
 	}
 	for c := n.FirstChild(); c != nil; c = c.NextSibling() {

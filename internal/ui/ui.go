@@ -6,14 +6,19 @@ package ui
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/fsnotify/fsnotify"
 	"github.com/mattn/go-runewidth"
+	"github.com/muesli/termenv"
 
+	"github.com/ernsoylu/MDView/internal/img"
 	"github.com/ernsoylu/MDView/internal/nav"
 	"github.com/ernsoylu/MDView/internal/parser"
 	"github.com/ernsoylu/MDView/internal/render"
@@ -71,6 +76,10 @@ type Model struct {
 	watcher *fsnotify.Watcher
 	opener  func(string) error // external opener, replaceable in tests
 
+	imageMode render.ImageMode
+	imgIDs    *img.Registry
+	pendingTx []string // kitty transmissions awaiting a write to the tty
+
 	// search
 	query        string
 	matches      []match
@@ -92,6 +101,8 @@ func New(doc *parser.Doc, th theme.Theme, name, path string) Model {
 	m := Model{doc: doc, th: th, name: name, path: path, outline: render.Outline(doc), cur: -1}
 	m.anchors = nav.Anchors(m.outline)
 	m.opener = func(target string) error { return exec.Command("xdg-open", target).Start() }
+	m.imageMode = detectImages()
+	m.imgIDs = img.NewRegistry()
 	if path != "" {
 		if w, err := fsnotify.NewWatcher(); err == nil {
 			if w.Add(filepath.Dir(path)) == nil {
@@ -106,7 +117,52 @@ func New(doc *parser.Doc, th theme.Theme, name, path string) Model {
 
 func (m Model) Init() tea.Cmd { return m.watchCmd() }
 
+// detectImages picks the best image path for this terminal: kitty graphics
+// where advertised, half-block mosaic on any color terminal, off when mono
+// (piped output, NO_COLOR, tests).
+func detectImages() render.ImageMode {
+	if lipgloss.ColorProfile() == termenv.Ascii {
+		return render.ImagesOff
+	}
+	if img.KittySupported() {
+		return render.ImagesKitty
+	}
+	return render.ImagesHalfblock
+}
+
+// Update wraps update so that any render pass that produced kitty
+// transmissions flushes them to the terminal exactly once.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	nm, cmd := m.update(msg)
+	model, ok := nm.(Model)
+	if !ok || len(model.pendingTx) == 0 {
+		return nm, cmd
+	}
+	tx := model.pendingTx
+	model.pendingTx = nil
+	return model, tea.Batch(cmd, writeTTY(tx))
+}
+
+// writeTTY writes raw escape sequences directly to the terminal, bypassing
+// bubbletea's renderer: graphics transmissions must not be part of the
+// diffed frame, or they would be re-sent on every repaint.
+func writeTTY(chunks []string) tea.Cmd {
+	return func() tea.Msg {
+		f, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+		if err != nil {
+			return nil
+		}
+		defer f.Close()
+		for _, c := range chunks {
+			if _, err := io.WriteString(f, c); err != nil {
+				return nil
+			}
+		}
+		return nil
+	}
+}
+
+func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
@@ -336,7 +392,13 @@ func (m *Model) reflow() {
 	if w > 120 {
 		w = 120
 	}
-	m.lines = render.Render(m.doc, m.th, w)
+	opts := render.Options{Images: m.imageMode, IDs: m.imgIDs}
+	if m.path != "" {
+		opts.BaseDir = filepath.Dir(m.path)
+	}
+	lines, tx := render.RenderDoc(m.doc, m.th, w, opts)
+	m.lines = lines
+	m.pendingTx = append(m.pendingTx, tx...)
 	m.rendered = make([]string, len(m.lines))
 	m.plain = make([]string, len(m.lines))
 	for i, ln := range m.lines {

@@ -70,7 +70,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Link selection (locked):** **hint mode** — `f` overlays letter labels on visible links (vimium-style) — plus **mouse click**. No Tab-cycling.
 - **Jumplist (locked):** one unified history — link follows, TOC jumps, and search jumps all push; `Ctrl+O` goes back, `Ctrl+I` forward, restoring exact document + scroll state. Relative links (`./other.md`) and `#anchors` resolve with GitHub-style heading slugs.
 - **URLs:** OSC 8 hyperlinks (`\x1b]8;;url\x1b\\label\x1b]8;;\x1b\\`) emitted at render time; suppressed when the color profile is mono (piped/`NO_COLOR`). `Enter`/click on an `http(s)` link opens the browser via `xdg-open` (v0.3).
-- **Images (locked fallback order):** styled placeholder `🖼 [Image: Alt] (url)` (v0.1) → **half-block mosaic** rendering, which works in any color terminal (v0.4) → **Kitty graphics protocol** using Unicode placeholders so images survive scrolling (v0.4). Sixel/iTerm2: backlog, optional.
+- **Images (implemented v0.4):** an image-only paragraph with a **local** path renders as a block — **half-block mosaic** (`▀` cells, any color terminal) or **Kitty graphics protocol** with Unicode placeholders (U+10EEEE + row/col diacritics, id in the foreground color) when kitty/ghostty is detected, so images scroll with the buffer. Transmissions are written to `/dev/tty` once per image (keyed by path+mtime+size in `img.Registry`), never through the diffed frame. Everything else — remote URLs, unreadable files, inline images mid-text, mono profile — stays the styled placeholder. A dim caption follows each rendered image. Height caps at 24 cells. Sixel/iTerm2 and remote fetching: backlog.
 
 ### 5. Vim Editor Integration & Live Preview
 - **No Embedded Editor:** do NOT implement custom text editing engines.
@@ -148,7 +148,7 @@ Future packages (`internal/nav`, `internal/img`, `internal/editor`) are created 
 - [x] **v0.1 — read-only pager:** GFM parse; styled-line IR with source mapping; wrap/lists/quotes/tables/task lists; chroma syntax highlighting; adaptive default theme + Plain; alt-screen pager with keymap + wheel; status bar; help overlay; resize re-anchoring; stdin + piped dump modes; OSC 8; golden/unit/fuzz/bench tests; CI.
 - [x] **v0.2 — search + TOC:** incremental `/` with `n`/`N` and match highlighting; fuzzy TOC popup jump.
 - [x] **v0.3 — links & flow:** hint mode + mouse follow; unified jumplist (`Ctrl+O`/`Ctrl+I`); relative-doc + GitHub-slug anchor resolution; `xdg-open` for URLs; `e` editor integration via `vim +N`; watch mode.
-- [ ] **v0.4 — images:** half-block mosaic fallback; Kitty protocol with Unicode placeholders.
+- [x] **v0.4 — images:** half-block mosaic fallback; Kitty protocol with Unicode placeholders.
 - [ ] **v0.5 — LaTeX math:** `$`/`$$` goldmark extension; go-latex/latex rendering through the image pipeline; raw-TeX fallback.
 - [ ] **v1.0 — polish:** external YAML themes; per-file reading-position persistence (XDG state dir); `y` yank code block via OSC 52; `--width` flag; goreleaser + man page.
-- **Backlog:** section folding (`za`/`zR`/`zM`), Sixel/iTerm2 images, footnotes, regex search, horizontal scroll for wide content, lazy viewport syntax highlighting.
+- **Backlog:** section folding (`za`/`zR`/`zM`), Sixel/iTerm2 images, remote image fetching, footnotes, regex search, horizontal scroll for wide content, lazy viewport syntax highlighting.
