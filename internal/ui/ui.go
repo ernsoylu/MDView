@@ -25,26 +25,6 @@ import (
 	"github.com/ernsoylu/MDView/internal/theme"
 )
 
-const helpText = `mdv — keys
-
-  j / ↓          scroll down       d / ctrl+d   half page down
-  k / ↑          scroll up         u / ctrl+u   half page up
-  space / pgdn   page down         b / pgup     page up
-  g / home       go to top         G / end      go to bottom
-
-  /              search (enter keep · esc cancel)
-  n / N          next / previous match
-  t              table of contents (type to filter)
-  esc            clear search / close overlay
-
-  f              follow link (type its label; click works too)
-  ctrl+o / tab   jump back / forward
-  e / i          edit at current line ($EDITOR, default vim)
-  y              yank nearest code block to the clipboard
-
-  ?              toggle this help
-  q / ctrl+c     quit`
-
 type mode int
 
 const (
@@ -103,6 +83,8 @@ type Model struct {
 	// link hints
 	hints      []hint
 	hintPrefix string
+
+	keys map[string]action // normal-mode bindings, overridable via keys.yaml
 }
 
 func New(doc *parser.Doc, th theme.Theme, name, path string) Model {
@@ -110,6 +92,7 @@ func New(doc *parser.Doc, th theme.Theme, name, path string) Model {
 	m.anchors = nav.Anchors(m.outline)
 	m.opener = systemOpen
 	m.tty = writeRawTTY
+	m.keys = defaultKeymap()
 	m.imageMode = detectImages()
 	m.imgIDs = img.NewRegistry()
 	m.maxWidth = 120
@@ -157,6 +140,14 @@ func (m Model) WithEditor(ed string) Model {
 // WithImages overrides the detected image mode.
 func (m Model) WithImages(mode render.ImageMode) Model {
 	m.imageMode = mode
+	return m
+}
+
+// WithKeys replaces the normal-mode bindings.
+func (m Model) WithKeys(keys map[string]action) Model {
+	if len(keys) > 0 {
+		m.keys = keys
+	}
 	return m
 }
 
@@ -271,72 +262,73 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case modeHints:
 			return m.updateHints(msg)
 		case modeHelp:
-			switch msg.String() {
-			case "q":
+			// esc closes an overlay whatever it is bound to elsewhere.
+			switch act := m.keys[msg.String()]; {
+			case act == actQuit:
 				return m, m.quitCmd()
-			case "?", "esc":
+			case act == actHelp, msg.String() == "esc":
 				m.mode = modeNormal
 			}
 			return m, nil
 		}
-		switch msg.String() {
-		case "q":
+		switch m.keys[msg.String()] {
+		case actQuit:
 			return m, m.quitCmd()
-		case "?":
+		case actHelp:
 			m.mode = modeHelp
-		case "esc":
+		case actClearSearch:
 			m.clearSearch()
-		case "/":
+		case actSearch:
 			m.mode = modeSearch
 			m.searchOrigin = m.offset
 			m.query = ""
 			m.refreshSearch(false)
-		case "n":
+		case actNextMatch:
 			m.nextMatch(1)
-		case "N":
+		case actPrevMatch:
 			m.nextMatch(-1)
-		case "t":
+		case actTOC:
 			m.mode = modeTOC
 			m.tocQuery = ""
 			m.tocSel = 0
 			m.refilterTOC()
-		case "f":
+		case actHints:
 			m.startHints()
-		case "ctrl+o":
+		case actJumpBack:
 			if p, ok := m.jump.Back(m.posHere()); ok {
 				m.restore(p)
 			} else {
 				m.flash = "at oldest jump"
 			}
-		case "tab": // terminals send Ctrl+I as Tab
+		case actJumpForward: // terminals send Ctrl+I as Tab
 			if p, ok := m.jump.Forward(m.posHere()); ok {
 				m.restore(p)
 			} else {
 				m.flash = "at newest jump"
 			}
-		case "e", "i":
+		case actEdit:
 			if cmd := m.editorCmd(); cmd != nil {
 				return m, cmd
 			}
-		case "y":
+		case actYank:
 			if cmd := m.yank(); cmd != nil {
 				return m, cmd
 			}
-		case "j", "down":
+		case actLineDown:
 			m.scroll(1)
-		case "k", "up":
+		case actLineUp:
 			m.scroll(-1)
-		case "d", "ctrl+d":
+		case actHalfDown:
 			m.scroll(m.contentHeight() / 2)
-		case "u", "ctrl+u":
+		case actHalfUp:
 			m.scroll(-m.contentHeight() / 2)
-		case " ", "pgdown", "ctrl+f":
+		case actPageDown:
 			m.scroll(m.contentHeight())
-		case "b", "pgup", "ctrl+b":
+		case actPageUp:
 			m.scroll(-m.contentHeight())
-		case "g", "home":
+		case actTop:
 			m.offset = 0
-		case "G", "end":
+		case actBottom:
 			m.offset = m.maxOffset()
 		}
 	}
@@ -350,10 +342,11 @@ func (m Model) View() string {
 	var b strings.Builder
 	switch m.mode {
 	case modeHelp:
-		helpLines := strings.Split(helpText, "\n")
+		helpLines := strings.Split(m.helpView(), "\n")
 		for i := 0; i < m.contentHeight(); i++ {
 			if i < len(helpLines) {
-				b.WriteString(" " + helpLines[i])
+				// A wrapped line would push the rest of the overlay down.
+				b.WriteString(" " + runewidth.Truncate(helpLines[i], m.width-1, "…"))
 			}
 			b.WriteString("\n")
 		}

@@ -97,7 +97,13 @@ func main() {
 		return
 	}
 
-	m := ui.New(doc, th, name, path).WithStore(state.Open()).WithEditor(cfg.Editor)
+	keys, err := ui.LoadKeys(config.KeysPath())
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "mdv:", err)
+		os.Exit(1)
+	}
+
+	m := ui.New(doc, th, name, path).WithStore(state.Open()).WithEditor(cfg.Editor).WithKeys(keys)
 	if *widthFlag > 0 {
 		m = m.WithMaxWidth(*widthFlag)
 	}
