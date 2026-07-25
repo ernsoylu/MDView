@@ -349,3 +349,37 @@ func TestExtractIgnoresTraversingPaths(t *testing.T) {
 		t.Errorf("extracted %q", got)
 	}
 }
+
+// TestReplacePreservesMode: an update must not widen access to mdv. A
+// binary the user keeps private stays private.
+func TestReplacePreservesMode(t *testing.T) {
+	for _, mode := range []os.FileMode{0o700, 0o755, 0o750} {
+		dest := filepath.Join(t.TempDir(), "mdv")
+		if err := os.WriteFile(dest, []byte("old"), mode); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(dest, mode); err != nil { // umask-proof
+			t.Fatal(err)
+		}
+		if err := Replace(dest, []byte("new")); err != nil {
+			t.Fatal(err)
+		}
+		fi, err := os.Stat(dest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := fi.Mode().Perm(); got != mode {
+			t.Errorf("mode %v became %v after the update", mode, got)
+		}
+	}
+}
+
+// TestReplaceRequiresAnExistingBinary: Replace takes its permissions from
+// the file it is replacing, so a missing target is an error rather than a
+// guess at a default.
+func TestReplaceRequiresAnExistingBinary(t *testing.T) {
+	dest := filepath.Join(t.TempDir(), "not-there")
+	if err := Replace(dest, []byte("new")); err == nil {
+		t.Fatal("replacing a nonexistent binary should fail")
+	}
+}
