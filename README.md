@@ -35,6 +35,7 @@ mdv README.md
   with the text).
 - **LaTeX display math** rendered through the same image pipeline
   (go-latex), with raw-TeX fallback.
+- **Mermaid diagrams** (opt-in) through the same pipeline, via mermaid-cli.
 - **Live reload**: edits from any editor re-render in place, position kept —
   mdv doubles as a Markdown preview.
 - **Edit in place**: `e` suspends the viewer and opens `$EDITOR` at the line
@@ -152,7 +153,14 @@ On first run mdv creates **`~/.MDView/`** with three commented template files:
   width: 0         # max content width; 0 = terminal width, capped at 120
   editor: ""       # editor for e/i; empty uses $EDITOR, then vim
   images: auto     # auto, kitty, halfblock, off
+  mermaid: false   # render mermaid fences (needs mmdc on PATH)
   ```
+
+  `mermaid` is off by default on purpose: mermaid-cli drives a headless
+  browser over content that came from the document, which is a larger thing
+  to opt into than a colour scheme. With it off — or with `mmdc` not
+  installed, or a diagram that does not compile — the fence stays a
+  syntax-highlighted code block.
 
 - **`~/.MDView/theme.yaml`** — your theme. Uncomment any key to override
   the built-in adaptive theme:

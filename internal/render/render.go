@@ -33,6 +33,7 @@ type Options struct {
 	Images       ImageMode
 	MaxImageRows int           // cap on image height in cells; 0 means 24
 	IDs          *img.Registry // required for ImagesKitty
+	MermaidCmd   string        // mermaid-cli path; "" leaves ```mermaid as code
 }
 
 type renderer struct {
@@ -103,7 +104,13 @@ func (r *renderer) block(n ast.Node, width int) []Line {
 	case *ast.List:
 		return r.list(n, width)
 	case *ast.FencedCodeBlock:
-		return r.code(n.Lines(), string(n.Language(r.src)), width)
+		lang := string(n.Language(r.src))
+		if strings.EqualFold(lang, "mermaid") {
+			if lines := r.mermaidBlock(n, width); lines != nil {
+				return lines
+			}
+		}
+		return r.code(n.Lines(), lang, width)
 	case *ast.CodeBlock:
 		return r.code(n.Lines(), "", width)
 	case *ast.ThematicBreak:

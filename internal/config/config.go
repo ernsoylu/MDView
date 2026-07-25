@@ -21,6 +21,11 @@ type Config struct {
 	Width  int    `yaml:"width"`  // max content width; 0 = auto
 	Editor string `yaml:"editor"` // overrides $EDITOR for the e/i keys
 	Images string `yaml:"images"` // auto, kitty, halfblock, off
+
+	// Mermaid renders ```mermaid fences through mermaid-cli. Off by
+	// default: it runs a headless browser over content that came from the
+	// document, which is a bigger thing to opt into than a colour scheme.
+	Mermaid bool `yaml:"mermaid"`
 }
 
 // Dir returns the configuration directory, "" when home is undetectable.
@@ -105,6 +110,12 @@ const configTemplate = `# mdv configuration (~/.MDView/config.yaml)
 # Image rendering: auto (kitty where supported, else half-block mosaic),
 # kitty, halfblock, or off.
 #images: auto
+
+# Render mermaid fences as diagrams. Needs mermaid-cli (mmdc) on PATH.
+# Off by default: mmdc drives a headless browser over content that came
+# from the document, so this is opt-in. Without it the fence stays a
+# syntax-highlighted code block.
+#mermaid: false
 `
 
 const themeTemplate = `# mdv theme (~/.MDView/theme.yaml)
