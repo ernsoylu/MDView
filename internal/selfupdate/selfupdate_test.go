@@ -383,3 +383,31 @@ func TestReplaceRequiresAnExistingBinary(t *testing.T) {
 		t.Fatal("replacing a nonexistent binary should fail")
 	}
 }
+
+// TestRefuseInsecureRedirect: the archive and the checksums that vouch for
+// it must not be downgraded onto plain http, or verifying one against the
+// other proves nothing.
+func TestRefuseInsecureRedirect(t *testing.T) {
+	mustParse := func(raw string) *http.Request {
+		req, err := http.NewRequest(http.MethodGet, raw, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return req
+	}
+	if err := refuseInsecureRedirect(mustParse("https://example.com/a"), nil); err != nil {
+		t.Errorf("an https redirect should be allowed: %v", err)
+	}
+	err := refuseInsecureRedirect(mustParse("http://example.com/a"), nil)
+	if err == nil {
+		t.Fatal("a redirect onto http should be refused")
+	}
+	if !strings.Contains(err.Error(), "http://example.com") {
+		t.Errorf("error = %q, want it to name the target", err)
+	}
+	// A redirect loop is still bounded.
+	via := make([]*http.Request, 10)
+	if err := refuseInsecureRedirect(mustParse("https://example.com/a"), via); err == nil {
+		t.Error("a long redirect chain should be refused")
+	}
+}

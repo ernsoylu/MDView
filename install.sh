@@ -15,6 +15,12 @@ INSTALL_DIR="${MDV_INSTALL_DIR:-$HOME/.local/bin}"
 say() { printf '%s\n' "$*"; }
 die() { printf 'mdv installer: %s\n' "$*" >&2; exit 1; }
 
+# Every fetch follows redirects, so pin the protocol on both the initial
+# request and any redirect: without it a redirect can land on plain http,
+# and the archive and the checksums that vouch for it would travel over an
+# interceptable connection.
+https_curl() { curl -fsSL --proto '=https' --proto-redir '=https' "$@"; }
+
 command -v curl >/dev/null 2>&1 || die "curl is required"
 command -v tar >/dev/null 2>&1 || die "tar is required"
 
@@ -40,7 +46,7 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 say "Finding the latest release..."
-release_json=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest") ||
+release_json=$(https_curl "https://api.github.com/repos/$REPO/releases/latest") ||
 	die "could not reach the release feed"
 tag=$(printf '%s' "$release_json" | grep '"tag_name"' | head -1 |
 	sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
@@ -51,9 +57,9 @@ asset="mdv_${version}_${goos}_${goarch}.tar.gz"
 base="https://github.com/$REPO/releases/download/$tag"
 
 say "Downloading $asset ($tag)..."
-curl -fsSL -o "$tmp/$asset" "$base/$asset" ||
+https_curl -o "$tmp/$asset" "$base/$asset" ||
 	die "download failed — is there a $goos/$goarch build for $tag? Fallback: go install github.com/$REPO/cmd/mdv@latest"
-curl -fsSL -o "$tmp/checksums.txt" "$base/checksums.txt" || die "checksum download failed"
+https_curl -o "$tmp/checksums.txt" "$base/checksums.txt" || die "checksum download failed"
 
 say "Verifying checksum..."
 expected=$(grep "$asset" "$tmp/checksums.txt" | awk '{print $1}')
