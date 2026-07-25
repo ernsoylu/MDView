@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -76,7 +75,8 @@ type Model struct {
 
 	jump    nav.Jumplist
 	watcher *fsnotify.Watcher
-	opener  func(string) error // external opener, replaceable in tests
+	opener  func(string) error   // external opener, replaceable in tests
+	tty     func([]string) error // raw terminal writer, replaceable in tests
 
 	imageMode render.ImageMode
 	imgIDs    *img.Registry
@@ -108,7 +108,8 @@ type Model struct {
 func New(doc *parser.Doc, th theme.Theme, name, path string) Model {
 	m := Model{doc: doc, th: th, name: name, path: path, outline: render.Outline(doc), cur: -1}
 	m.anchors = nav.Anchors(m.outline)
-	m.opener = func(target string) error { return exec.Command("xdg-open", target).Start() }
+	m.opener = systemOpen
+	m.tty = writeRawTTY
 	m.imageMode = detectImages()
 	m.imgIDs = img.NewRegistry()
 	m.maxWidth = 120
@@ -191,23 +192,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	tx := model.pendingTx
 	model.pendingTx = nil
-	return model, tea.Batch(cmd, writeTTY(tx))
+	return model, tea.Batch(cmd, model.writeTTY("images", tx))
 }
 
-// writeTTY writes raw escape sequences directly to the terminal, bypassing
+// writeRawTTY writes escape sequences straight to the terminal, bypassing
 // bubbletea's renderer: graphics transmissions must not be part of the
 // diffed frame, or they would be re-sent on every repaint.
-func writeTTY(chunks []string) tea.Cmd {
-	return func() tea.Msg {
-		f, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
-		if err != nil {
-			return nil
+func writeRawTTY(chunks []string) error {
+	f, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	for _, c := range chunks {
+		if _, err := io.WriteString(f, c); err != nil {
+			return err
 		}
-		defer func() { _ = f.Close() }()
-		for _, c := range chunks {
-			if _, err := io.WriteString(f, c); err != nil {
-				return nil
-			}
+	}
+	return nil
+}
+
+// writeTTY performs a raw terminal write as a command, reporting failure in
+// the status bar. Silence here used to make a dropped image or an
+// unreachable clipboard indistinguishable from success.
+func (m Model) writeTTY(what string, chunks []string) tea.Cmd {
+	write := m.tty
+	return func() tea.Msg {
+		if err := write(chunks); err != nil {
+			return flashMsg(what + ": " + err.Error())
 		}
 		return nil
 	}

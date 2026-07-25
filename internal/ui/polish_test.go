@@ -105,9 +105,20 @@ func TestYankPicksNearestBlock(t *testing.T) {
 	if cb := m.pickCodeBlock(); cb == nil || !strings.Contains(cb.Content, "beta()") {
 		t.Fatalf("at bottom: picked %+v, want the beta block", cb)
 	}
-	m = press(m, runes("y"))
-	if !strings.Contains(m.flash, "2 code line") {
-		t.Errorf("flash = %q, want a 2-line yank confirmation", m.flash)
+	// The confirmation now waits on the clipboard write, so drive the
+	// command rather than reading the flash straight after the keypress.
+	var wrote []string
+	m.tty = func(chunks []string) error { wrote = append(wrote, chunks...); return nil }
+	_, cmd := m.Update(runes("y"))
+	if cmd == nil {
+		t.Fatal("y produced no command")
+	}
+	msg, ok := cmd().(flashMsg)
+	if !ok || !strings.Contains(string(msg), "2 code line") {
+		t.Errorf("yank message = %#v, want a 2-line confirmation", msg)
+	}
+	if len(wrote) != 1 || !strings.HasPrefix(wrote[0], "\x1b]52;c;") {
+		t.Errorf("clipboard write = %q, want one OSC 52 sequence", wrote)
 	}
 }
 
