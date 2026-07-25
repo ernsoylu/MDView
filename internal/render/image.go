@@ -138,6 +138,15 @@ func mosaicLines(cells [][]img.Cell, srcLine int) []Line {
 	return out
 }
 
+// hexColor formats a cell colour. This runs up to twice per mosaic cell —
+// tens of thousands of times for a full-width picture — so it spells out
+// the hex rather than paying for a format string.
 func hexColor(c [3]uint8) lipgloss.Color {
-	return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", c[0], c[1], c[2]))
+	const digits = "0123456789abcdef"
+	b := [7]byte{'#'}
+	for i, v := range c {
+		b[1+i*2] = digits[v>>4]
+		b[2+i*2] = digits[v&0x0f]
+	}
+	return lipgloss.Color(string(b[:]))
 }

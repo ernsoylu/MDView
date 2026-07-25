@@ -1,6 +1,7 @@
 package render_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -98,5 +99,30 @@ func TestInlineMathStaysRaw(t *testing.T) {
 	joined := plainOf(lines)
 	if !strings.Contains(joined, "$e^{i\\pi} = -1$") {
 		t.Errorf("inline math should render as raw TeX with delimiters: %q", joined)
+	}
+}
+
+// BenchmarkMathReflow measures a resize on a math-bearing document: the
+// document is already parsed and rendered once, exactly as reflow() finds
+// it. Rasterizing dominates a first paint (~3.8 ms an expression), so this
+// tracks that repeat renders stay off that path.
+func BenchmarkMathReflow(b *testing.B) {
+	var sb strings.Builder
+	for i := 0; i < 8; i++ {
+		// Distinct expressions, none using sub- or superscripts: go-latex
+		// rejects those outright, and the fallback path is not what this
+		// measures.
+		fmt.Fprintf(&sb, "## Section %d\n\nSome prose.\n\n$$\n\\frac{%c+b}{c-d} = \\sqrt{x} + \\int f(x)\n$$\n\n", i, 'a'+i)
+	}
+	doc := parser.Parse([]byte(sb.String()))
+	opts := render.Options{Images: render.ImagesHalfblock, IDs: img.NewRegistry()}
+	first, _ := render.RenderDoc(doc, theme.Plain(), 80, opts) // first paint
+	if strings.Contains(plainOf(first), "$$") {
+		b.Skip("go-latex declined these expressions; this would time the raw-TeX fallback")
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		render.RenderDoc(doc, theme.Plain(), 80, opts)
 	}
 }
