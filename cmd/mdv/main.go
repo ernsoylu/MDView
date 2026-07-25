@@ -48,10 +48,21 @@ func main() {
 	args := flag.Args()
 	stdinPiped := !term.IsTerminal(int(os.Stdin.Fd()))
 
+	// A directory — or no argument at all on a terminal — browses instead
+	// of reading a document.
+	browseRoot := ""
+	switch {
+	case len(args) == 1 && args[0] != "-" && ui.IsDir(args[0]):
+		browseRoot = args[0]
+	case len(args) == 0 && !stdinPiped:
+		browseRoot = "."
+	}
+
 	var src []byte
 	var name, path string
 	var err error
 	switch {
+	case browseRoot != "":
 	case len(args) == 1 && args[0] != "-":
 		src, err = os.ReadFile(args[0])
 		name = args[0]
@@ -75,11 +86,21 @@ func main() {
 		fmt.Fprintln(os.Stderr, "mdv:", err)
 		os.Exit(1)
 	}
-	doc := parser.Parse(src)
-
 	if *widthFlag == 0 && cfg.Width > 0 {
 		*widthFlag = cfg.Width
 	}
+	if browseRoot != "" {
+		if !term.IsTerminal(int(os.Stdout.Fd())) {
+			fmt.Fprintln(os.Stderr, "mdv: browsing needs a terminal; name a file to render")
+			os.Exit(2)
+		}
+		if err := browse(browseRoot, th, cfg, *widthFlag); err != nil {
+			fmt.Fprintln(os.Stderr, "mdv:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	doc := parser.Parse(src)
 
 	// Not a terminal: dump the rendered document and exit. The mono color
 	// profile strips styling and OSC 8 automatically in this case.
@@ -97,15 +118,22 @@ func main() {
 		return
 	}
 
-	keys, err := ui.LoadKeys(config.KeysPath())
-	if err != nil {
+	if _, err := runPager(doc, th, name, path, cfg, *widthFlag, stdinPiped); err != nil {
 		fmt.Fprintln(os.Stderr, "mdv:", err)
 		os.Exit(1)
 	}
+}
 
+// runPager shows one document full-screen, reporting whether the user left
+// with ctrl+c rather than the quit key.
+func runPager(doc *parser.Doc, th theme.Theme, name, path string, cfg config.Config, width int, stdinPiped bool) (hardQuit bool, err error) {
+	keys, err := ui.LoadKeys(config.KeysPath())
+	if err != nil {
+		return false, err
+	}
 	m := ui.New(doc, th, name, path).WithStore(state.Open()).WithEditor(cfg.Editor).WithKeys(keys)
-	if *widthFlag > 0 {
-		m = m.WithMaxWidth(*widthFlag)
+	if width > 0 {
+		m = m.WithMaxWidth(width)
 	}
 	switch cfg.Images {
 	case "", "auto":
@@ -122,9 +150,50 @@ func main() {
 	if stdinPiped {
 		opts = append(opts, tea.WithInputTTY())
 	}
-	if _, err := tea.NewProgram(m, opts...).Run(); err != nil {
-		fmt.Fprintln(os.Stderr, "mdv:", err)
-		os.Exit(1)
+	final, err := tea.NewProgram(m, opts...).Run()
+	if err != nil {
+		return false, err
+	}
+	fm, ok := final.(ui.Model)
+	return ok && fm.HardQuit(), nil
+}
+
+// browse alternates the file picker with the pager: quitting a document
+// comes back to the list, and only the list — or ctrl+c — leaves mdv.
+func browse(root string, th theme.Theme, cfg config.Config, width int) error {
+	entries, truncated, err := ui.FindMarkdown(root)
+	if err != nil {
+		return err
+	}
+	for {
+		b := ui.NewBrowser(root, entries, truncated, th)
+		final, err := tea.NewProgram(b, tea.WithAltScreen()).Run()
+		if err != nil {
+			return err
+		}
+		picked, ok := final.(ui.Browser)
+		if !ok || picked.HardQuit() {
+			return nil
+		}
+		path, chose := picked.Chosen()
+		if !chose {
+			return nil
+		}
+		src, rerr := os.ReadFile(path)
+		if rerr != nil {
+			return rerr
+		}
+		name := path
+		if rel, relErr := filepath.Rel(root, path); relErr == nil {
+			name = rel
+		}
+		hard, perr := runPager(parser.Parse(src), th, name, path, cfg, width, false)
+		if perr != nil {
+			return perr
+		}
+		if hard {
+			return nil
+		}
 	}
 }
 

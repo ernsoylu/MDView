@@ -5,6 +5,9 @@ mdv \- full-screen terminal Markdown viewer
 .B mdv
 [\fIflags\fR] \fIfile.md\fR
 .br
+.B mdv
+[\fIflags\fR] [\fIdirectory\fR]
+.br
 .I command
 |
 .B mdv
@@ -15,6 +18,12 @@ code, box-drawing tables, incremental search, a fuzzy table-of-contents jump,
 link following with vimium-style hints and a jumplist, images (half-block mosaic
 anywhere, kitty graphics in kitty/ghostty), LaTeX display math, live reload on
 file change, and external editing at the current line.
+.PP
+Given a directory, or no argument at all, mdv lists the markdown files
+underneath it and opens the one you pick. Type to filter the list, \fBenter\fR
+opens, and \fBesc\fR leaves. Quitting a document returns to the list;
+\fBctrl+c\fR leaves mdv outright. Dot directories and dependency trees
+(\fInode_modules\fR, \fIvendor\fR, \fItarget\fR) are skipped.
 .PP
 When standard output is not a terminal, the rendered document is written as
 plain text instead.

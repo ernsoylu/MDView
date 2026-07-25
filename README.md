@@ -21,6 +21,9 @@ mdv README.md
 - **Incremental search** (`/`) with smart-case, match highlighting, and
   `n`/`N` navigation.
 - **Fuzzy table of contents** (`t`): type a few letters, jump to any heading.
+- **Browse a tree**: `mdv` with no argument lists the markdown files under
+  the current directory, filtered as you type; quitting a document returns
+  to the list.
 - **Follow links like a browser**: press `f` for vimium-style hint labels or
   just click. Anchors and relative `.md` files open in mdv (GitHub-compatible
   heading slugs); web links open in your browser. `Ctrl+O`/`Tab` walk the
@@ -87,9 +90,16 @@ go build -ldflags="-s -w" -o bin/mdv ./cmd/mdv
 
 ```
 mdv [flags] file.md
+mdv                      # browse markdown under the current directory
+mdv docs/                # browse a directory
 command | mdv            # read from stdin
 mdv file.md | less -R    # non-TTY output is plain text
 ```
+
+With a directory — or no argument at all — mdv lists the markdown files
+underneath, filtered as you type. `Enter` opens, `Esc` leaves, and quitting a
+document comes back to the list; `Ctrl+C` leaves outright. Dot directories
+and dependency trees (`node_modules`, `vendor`, `target`) are skipped.
 
 | Flag | Meaning |
 |---|---|
