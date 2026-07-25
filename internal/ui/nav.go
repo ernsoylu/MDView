@@ -112,6 +112,10 @@ func (m *Model) followLink(target string) tea.Cmd {
 			m.flash = "no such anchor: " + target
 		}
 	case strings.Contains(target, "://") || strings.HasPrefix(target, "mailto:"):
+		if !webScheme(target) {
+			m.flash = "refusing to open non-web link: " + target
+			return nil
+		}
 		return m.openExternalCmd(target)
 	default:
 		pathPart, frag, _ := strings.Cut(target, "#")
@@ -139,6 +143,22 @@ func (m *Model) followLink(target string) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// webScheme reports whether a link target may be handed to the system
+// opener. A markdown document is untrusted input, and desktop URI handlers
+// turn file:// and app-registered schemes into a code-execution surface, so
+// only the schemes a document has a legitimate reason to use are followed.
+func webScheme(target string) bool {
+	scheme, _, ok := strings.Cut(target, ":")
+	if !ok {
+		return false
+	}
+	switch strings.ToLower(scheme) {
+	case "http", "https", "mailto":
+		return true
+	}
+	return false
 }
 
 func normalizeFragment(frag string) string {

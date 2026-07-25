@@ -116,7 +116,9 @@ func wrap(segs []seg, width int, srcLine int) []Line {
 }
 
 // chunkSpans hard-breaks spans into rows of at most width columns, used for
-// content that must not word-wrap (code lines, raw HTML).
+// content that must not word-wrap (code lines, raw HTML). These spans are
+// built straight from the source rather than through inlines, so control
+// characters are replaced here as the text is rechunked.
 func chunkSpans(spans []Span, width int) [][]Span {
 	if width < 1 {
 		width = 1
@@ -136,6 +138,9 @@ func chunkSpans(spans []Span, width int) [][]Span {
 			}
 		}
 		for _, ch := range s.Text {
+			if isControl(ch) {
+				ch = replacement
+			}
 			chW := runewidth.RuneWidth(ch)
 			if w+bw+chW > width && w+bw > 0 {
 				emit()

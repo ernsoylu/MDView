@@ -157,11 +157,15 @@ func FuzzRender(f *testing.F) {
 	} {
 		f.Add(s)
 	}
+	f.Add("esc \x1b[31m in text\n\n```\n\x1b]52;c;AA\x07\n```\n")
 	f.Fuzz(func(t *testing.T, s string) {
 		for _, ln := range render.Render(parser.Parse([]byte(s)), theme.Plain(), 30) {
 			for _, sp := range ln.Spans {
 				if strings.ContainsRune(sp.Text, '\n') {
 					t.Fatalf("newline inside span: %q", sp.Text)
+				}
+				if hasControl(sp.Text) {
+					t.Fatalf("control character inside span: %q", sp.Text)
 				}
 			}
 		}

@@ -40,7 +40,7 @@ func (l Line) String() string {
 			t = s.Style.Render(s.Text)
 		}
 		if s.Link != "" && osc8 {
-			t = "\x1b]8;;" + s.Link + "\x1b\\" + t + "\x1b]8;;\x1b\\"
+			t = "\x1b]8;;" + sanitizeLink(s.Link) + "\x1b\\" + t + "\x1b]8;;\x1b\\"
 		}
 		b.WriteString(t)
 	}

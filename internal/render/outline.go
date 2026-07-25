@@ -23,7 +23,7 @@ func Outline(doc *parser.Doc) []OutlineEntry {
 			if h, ok := c.(*ast.Heading); ok {
 				out = append(out, OutlineEntry{
 					Level:      h.Level,
-					Text:       nodeText(h, doc.Source),
+					Text:       Sanitize(nodeText(h, doc.Source)),
 					SourceLine: nodeLine(doc, h),
 				})
 				continue
