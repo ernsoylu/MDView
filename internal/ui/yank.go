@@ -2,7 +2,6 @@ package ui
 
 import (
 	"encoding/base64"
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -38,6 +37,6 @@ func (m *Model) yank() tea.Cmd {
 		if err := write([]string{seq}); err != nil {
 			return flashMsg("yank: " + err.Error())
 		}
-		return flashMsg(fmt.Sprintf("yanked %d code line(s)", lines))
+		return flashMsg("yanked " + count(lines, "code line", "code lines"))
 	}
 }

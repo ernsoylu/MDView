@@ -496,7 +496,7 @@ func (m *Model) reflow() {
 func (m Model) statusView() string {
 	switch m.mode {
 	case modeSearch:
-		return m.statusLine(" /"+m.query, fmt.Sprintf("%d matches · enter keep · esc cancel ", len(m.matches)))
+		return m.statusLine(" /"+m.query, count(len(m.matches), "match", "matches")+" · enter keep · esc cancel ")
 	case modeTOC:
 		sel := 0
 		if len(m.filtered) > 0 {
@@ -537,6 +537,15 @@ func (m Model) statusView() string {
 // flash messages — that must not reach the terminal as escape sequences.
 func (m Model) statusLine(left, right string) string {
 	return m.th.StatusBar.Render(fitRow(render.Sanitize(left), render.Sanitize(right), m.width))
+}
+
+// count renders a number with the right form of its noun, so a status bar
+// says "1 match" rather than "1 matches".
+func count(n int, one, many string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, one)
+	}
+	return fmt.Sprintf("%d %s", n, many)
 }
 
 // fitRow lays left and right on a row of at most width cells, trimming the
