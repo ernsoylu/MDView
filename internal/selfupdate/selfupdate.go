@@ -12,6 +12,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -28,7 +29,39 @@ const (
 	// past this is not an mdv build.
 	maxAsset = 64 << 20
 	timeout  = 60 * time.Second
+
+	// Bounds on expanding a downloaded archive. goreleaser produces a
+	// handful of entries and one binary of a few MB, but the archive
+	// arrives over the network, so its expansion is bounded rather than
+	// trusted: a small archive can otherwise declare an enormous one.
+	maxArchiveEntries = 512
+	maxBinaryBytes    = 64 << 20
+	maxTotalBytes     = 128 << 20
 )
+
+var errNoBinary = fmt.Errorf("archive did not contain the mdv binary")
+
+// binaryName is what the release archive calls the executable.
+func binaryName() string {
+	if runtime.GOOS == "windows" {
+		return "mdv.exe"
+	}
+	return "mdv"
+}
+
+// readAtMost reads up to limit bytes, failing if the reader has more — so
+// an entry whose header understates its size cannot slip past the checks
+// that were made against that header.
+func readAtMost(r io.Reader, limit int64) ([]byte, error) {
+	b, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(b)) > limit {
+		return nil, fmt.Errorf("entry is larger than %d MiB", limit>>20)
+	}
+	return b, nil
+}
 
 // Release is the part of the GitHub release API this needs.
 type Release struct {
@@ -124,44 +157,76 @@ func ExtractBinary(archive []byte) ([]byte, error) {
 	return fromTarGz(archive)
 }
 
+// fromTarGz walks a release tarball for the mdv binary.
+//
+// Entry paths are never used to write anything: the binary is matched on
+// base name and returned as bytes, so a traversing path has nothing to
+// traverse into. Expansion is bounded on entry count, per-entry size, and
+// total size.
 func fromTarGz(archive []byte) ([]byte, error) {
 	gz, err := gzip.NewReader(bytes.NewReader(archive))
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = gz.Close() }()
+
 	tr := tar.NewReader(gz)
-	for {
+	total := int64(0)
+	for entries := 0; entries < maxArchiveEntries; entries++ {
 		h, err := tr.Next()
-		if err == io.EOF {
-			break
+		if errors.Is(err, io.EOF) {
+			return nil, errNoBinary
 		}
 		if err != nil {
 			return nil, err
 		}
-		if filepath.Base(h.Name) == "mdv" && h.Typeflag == tar.TypeReg {
-			return io.ReadAll(io.LimitReader(tr, maxAsset))
+		if h.Size > maxBinaryBytes {
+			return nil, fmt.Errorf("archive entry %q declares more than %d MiB", h.Name, maxBinaryBytes>>20)
+		}
+		total += h.Size
+		if total > maxTotalBytes {
+			return nil, fmt.Errorf("archive expands to more than %d MiB", maxTotalBytes>>20)
+		}
+		if h.Typeflag == tar.TypeReg && filepath.Base(h.Name) == binaryName() {
+			return readAtMost(tr, maxBinaryBytes)
 		}
 	}
-	return nil, fmt.Errorf("archive did not contain the mdv binary")
+	return nil, fmt.Errorf("archive holds more than %d entries", maxArchiveEntries)
 }
 
+// fromZip is the Windows counterpart of fromTarGz, bounded the same way.
+// The declared uncompressed sizes are checked before anything is read, so
+// an archive that promises to expand enormously is refused up front.
 func fromZip(archive []byte) ([]byte, error) {
 	zr, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
 	if err != nil {
 		return nil, err
 	}
+	if len(zr.File) > maxArchiveEntries {
+		return nil, fmt.Errorf("archive holds more than %d entries", maxArchiveEntries)
+	}
+	total := uint64(0)
 	for _, f := range zr.File {
-		if filepath.Base(f.Name) == "mdv.exe" {
-			rc, err := f.Open()
-			if err != nil {
-				return nil, err
-			}
-			defer func() { _ = rc.Close() }()
-			return io.ReadAll(io.LimitReader(rc, maxAsset))
+		if f.UncompressedSize64 > maxBinaryBytes {
+			return nil, fmt.Errorf("archive entry %q declares more than %d MiB", f.Name, maxBinaryBytes>>20)
+		}
+		total += f.UncompressedSize64
+		if total > maxTotalBytes {
+			return nil, fmt.Errorf("archive expands to more than %d MiB", maxTotalBytes>>20)
 		}
 	}
-	return nil, fmt.Errorf("archive did not contain mdv.exe")
+	for _, f := range zr.File {
+		if filepath.Base(f.Name) != binaryName() {
+			continue
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = rc.Close() }()
+		return readAtMost(rc, maxBinaryBytes)
+	}
+	return nil, errNoBinary
 }
 
 // Replace installs binary at dest.
