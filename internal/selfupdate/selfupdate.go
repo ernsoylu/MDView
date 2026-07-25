@@ -83,8 +83,25 @@ func New(repo string) *Updater {
 		Repo:     repo,
 		APIBase:  "https://api.github.com",
 		DownBase: "https://github.com",
-		Client:   &http.Client{Timeout: timeout},
+		Client: &http.Client{
+			Timeout:       timeout,
+			CheckRedirect: refuseInsecureRedirect,
+		},
 	}
+}
+
+// refuseInsecureRedirect stops an https request being redirected onto plain
+// http. This fetches an executable: a downgrade would put the archive and
+// the checksums that vouch for it on the same interceptable connection, so
+// verifying one against the other would prove nothing.
+func refuseInsecureRedirect(req *http.Request, via []*http.Request) error {
+	if req.URL.Scheme != "https" {
+		return fmt.Errorf("refusing redirect to %s://%s", req.URL.Scheme, req.URL.Host)
+	}
+	if len(via) >= 10 {
+		return fmt.Errorf("too many redirects")
+	}
+	return nil
 }
 
 // Latest returns the newest published release.
