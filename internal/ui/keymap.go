@@ -38,6 +38,8 @@ const (
 	actJumpForward
 	actEdit
 	actYank
+	actVisual
+	actLineNumbers
 	actHelp
 	actQuit
 )
@@ -73,7 +75,9 @@ var commands = []struct {
 	{"jump-forward", actJumpForward, []string{"tab"}, "jump forward", 2},
 	{"edit", actEdit, []string{"e", "i"}, "edit at this line", 2},
 	{"yank", actYank, []string{"y"}, "yank code block", 2},
+	{"visual", actVisual, []string{"v", "V"}, "select lines to yank", 2},
 
+	{"line-numbers", actLineNumbers, []string{"#"}, "toggle line numbers", 3},
 	{"help", actHelp, []string{"?"}, "toggle this help", 3},
 	{"quit", actQuit, []string{"q"}, "quit", 3},
 }

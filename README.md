@@ -160,6 +160,8 @@ same as for stdin.
 | `Ctrl+O` / `Tab` | jumplist back / forward |
 | `e` / `i` | edit at the current line with `$EDITOR` |
 | `y` | yank the nearest code block to the clipboard |
+| `v` / `V` | visual-line select (scroll keys extend); `y` copies the markdown source |
+| `#` | toggle source line numbers |
 | `?` | help overlay |
 | `q` | quit |
 

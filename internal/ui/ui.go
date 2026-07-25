@@ -33,6 +33,7 @@ const (
 	modeSearch
 	modeTOC
 	modeHints
+	modeVisual
 )
 
 type Model struct {
@@ -84,6 +85,12 @@ type Model struct {
 	// link hints
 	hints      []hint
 	hintPrefix string
+
+	// visual-line selection: anchor and cursor as rendered-line indices
+	vAnchor, vCursor int
+
+	lineNums bool // show a source-line-number gutter
+	gutter   int  // gutter width in cells, 0 when numbers are off
 
 	keys map[string]action // normal-mode bindings, overridable via keys.yaml
 
@@ -258,8 +265,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case msg.Button == tea.MouseButtonWheelDown:
 			m.scroll(3)
 		case msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && m.mode == modeNormal:
-			if idx := m.offset + msg.Y; idx < len(m.lines) && msg.X >= 1 {
-				if url := linkAtCell(m.lines[idx], msg.X-1); url != "" {
+			if idx := m.offset + msg.Y; idx < len(m.lines) && msg.X >= 1+m.gutter {
+				if url := linkAtCell(m.lines[idx], msg.X-1-m.gutter); url != "" {
 					return m, m.followLink(url)
 				}
 			}
@@ -277,6 +284,8 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateTOC(msg)
 		case modeHints:
 			return m.updateHints(msg)
+		case modeVisual:
+			return m.updateVisual(msg)
 		case modeHelp:
 			// esc closes an overlay whatever it is bound to elsewhere.
 			switch act := m.keys[msg.String()]; {
@@ -330,6 +339,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if cmd := m.yank(); cmd != nil {
 				return m, cmd
 			}
+		case actVisual:
+			m.startVisual()
+		case actLineNumbers:
+			m.lineNums = !m.lineNums
+			m.reflow()
 		case actLineDown:
 			m.scroll(1)
 		case actLineUp:
@@ -371,7 +385,7 @@ func (m Model) View() string {
 	default:
 		for i := 0; i < m.contentHeight(); i++ {
 			if idx := m.offset + i; idx < len(m.rendered) {
-				b.WriteString(" " + m.renderLine(idx))
+				b.WriteString(" " + m.gutterFor(idx) + m.renderLine(idx))
 			}
 			b.WriteString("\n")
 		}
@@ -380,8 +394,22 @@ func (m Model) View() string {
 	return b.String()
 }
 
+// gutterFor formats the line-number gutter cell for one rendered line: the
+// source line number on the first row that renders it, blanks on wrapped
+// continuations and synthetic rows.
+func (m Model) gutterFor(idx int) string {
+	if m.gutter == 0 {
+		return ""
+	}
+	sl := m.lines[idx].SourceLine
+	if sl == 0 || (idx > 0 && m.lines[idx-1].SourceLine == sl) {
+		return strings.Repeat(" ", m.gutter)
+	}
+	return m.th.Dim.Render(fmt.Sprintf("%*d", m.gutter-1, sl)) + " "
+}
+
 // renderLine returns the ANSI string for one rendered line, overlaying
-// search highlights and hint labels as needed.
+// search highlights, hint labels, and the visual selection as needed.
 func (m Model) renderLine(idx int) string {
 	ranges := m.lineRanges[idx]
 	hasHint := false
@@ -393,7 +421,12 @@ func (m Model) renderLine(idx int) string {
 			}
 		}
 	}
-	if len(ranges) == 0 && !hasHint {
+	inSel := false
+	if m.mode == modeVisual {
+		lo, hi := m.selBounds()
+		inSel = idx >= lo && idx <= hi
+	}
+	if len(ranges) == 0 && !hasHint && !inSel {
 		return m.rendered[idx]
 	}
 	ln := m.lines[idx]
@@ -414,6 +447,13 @@ func (m Model) renderLine(idx int) string {
 			}
 			ln = overlayLabel(ln, h.at, h.label, &m.th.HintLabel)
 		}
+	}
+	if inSel {
+		if len(ln.Spans) == 0 {
+			// An empty row still needs a visible cell to read as selected.
+			ln = render.Line{Spans: []render.Span{{Text: " "}}, SourceLine: ln.SourceLine}
+		}
+		ln = ln.Highlight([][2]int{{0, len(ln.Plain())}}, &m.th.Selection)
 	}
 	return ln.String()
 }
@@ -464,7 +504,11 @@ func (m *Model) reflow() {
 	if m.ready {
 		anchor = m.topSourceLine()
 	}
-	w := m.width - 2
+	m.gutter = 0
+	if m.lineNums {
+		m.gutter = len(fmt.Sprint(m.doc.LineCount())) + 1
+	}
+	w := m.width - 2 - m.gutter
 	if w > m.maxWidth {
 		w = m.maxWidth
 	}
@@ -505,6 +549,9 @@ func (m Model) statusView() string {
 		return m.statusLine(" contents", fmt.Sprintf("%d/%d · enter jump · esc close ", sel, len(m.filtered)))
 	case modeHints:
 		return m.statusLine(" follow: "+m.hintPrefix, "type a label · esc cancel ")
+	case modeVisual:
+		lo, hi := m.selBounds()
+		return m.statusLine(" -- VISUAL LINE --", count(hi-lo+1, "line", "lines")+" · y yank · esc cancel ")
 	}
 	var pos string
 	switch {

@@ -106,6 +106,15 @@ The line is passed as \fB+N\fR, or in the form the editor expects:
 .B y
 Copy the nearest code block to the clipboard (OSC 52).
 .TP
+.B v, V
+Visual-line selection: the scroll keys extend it,
+.B y
+copies the selected lines' markdown source to the clipboard (OSC 52), esc
+cancels.
+.TP
+.B #
+Toggle a source-line-number gutter.
+.TP
 .B ?, q
 Help overlay; quit.
 .SH FILES

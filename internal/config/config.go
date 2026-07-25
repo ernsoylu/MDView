@@ -179,7 +179,9 @@ const keysTemplate = `# mdv keymap (~/.MDView/keys.yaml)
 #jump-forward: [tab]
 #edit: [e, i]
 #yank: [y]
+#visual: [v, V]
 
+#line-numbers: ["#"]
 #help: ["?"]
 #quit: [q]
 `
