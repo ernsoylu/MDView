@@ -113,7 +113,7 @@ Normal-mode bindings come from the `commands` table in `internal/ui/keymap.go`, 
 ## Part 3: Go Development Commands & Conventions
 
 ### Core Commands
-- **Run App:** `go run ./cmd/mdv <path/to/file.md>` (also accepts stdin: `cat notes.md | go run ./cmd/mdv`). Flags: `--theme <default|plain|file.yaml>`, `--width <n>`, `--version`.
+- **Run App:** `go run ./cmd/mdv <path/to/file.md>`. Also takes a directory or no argument (browse), several files (buffer list), an `http(s)` URL or `github.com/owner/repo` (fetch), and stdin when piped (`cat notes.md | go run ./cmd/mdv`). Flags: `--theme <default|plain|file.yaml>`, `--width <n>`, `--version`. Subcommand: `mdv update [--check]`.
 - **Build Binary:** `go build -ldflags="-s -w" -o bin/mdv ./cmd/mdv`
 - **Run All Tests:** `go test -race ./...`
 - **Run Specific Test:** `go test -v -run TestFunctionName ./path/to/pkg`
@@ -129,26 +129,30 @@ Normal-mode bindings come from the `commands` table in `internal/ui/keymap.go`, 
 
 ### Package Layout
 ```
-cmd/mdv          CLI entry: flags, config precedence, TTY detection, piped-dump mode, the update subcommand
-internal/config  ~/.MDView seeding and config.yaml loading
-internal/fetch   remote documents: http(s), github.com/owner/repo, blob links
-internal/selfupdate  release lookup, checksum verification, binary replacement
-internal/parser  goldmark setup, Doc with byte-offset → source-line index
-internal/render  AST → styled-line IR: inline flattening, wrapping, tables, chroma
-internal/theme   semantic Theme struct; Default() (adaptive) and Plain(); chroma palette
-internal/ui      bubbletea model: viewport, keys, mouse, status bar, help overlay
+cmd/mdv             CLI entry: flags, input dispatch, TTY detection, piped dump, update subcommand
+internal/config     ~/.MDView seeding; config.yaml loading
+internal/fetch      remote documents: http(s), github.com/owner/repo, blob links
+internal/img        image decoding, half-block mosaic, kitty protocol, terminal detection
+internal/mathext    goldmark extension for $…$ and $$…$$
+internal/nav        jumplist and GitHub-style heading slugs
+internal/parser     goldmark setup; Doc with byte-offset → source-line index
+internal/render     AST → styled-line IR: inline flattening, wrapping, tables, chroma, images, math, mermaid
+internal/selfupdate release lookup, checksum verification, binary replacement
+internal/state      per-file reading positions under the XDG state dir
+internal/theme      semantic Theme struct; Default() (adaptive) and Plain(); chroma palette
+internal/ui         bubbletea models: the pager and the file browser
 ```
-Future packages (`internal/nav`, `internal/img`, `internal/editor`) are created when their milestone starts — never before.
+Packages are created when their milestone starts, never before — `internal/editor` was planned and never needed, since editor integration is a `tea.ExecProcess` call in `internal/ui/nav.go`.
 
 ### Testing Conventions
 - Golden tests always use `theme.Plain()` (no ANSI, no OSC 8) so files stay readable and deterministic.
 - Renderer invariants: no `\n` inside a `Line`; rendered width ≤ requested width; no C0/C1 control character inside a `Span` (fuzz asserts all three, plus no panics).
-- **Performance budget:** parse+render of a 200 KB document must stay **under 100 ms** (`BenchmarkRenderProse` tracks this; don't gate CI on it). Currently ~47 ms. The budget covers prose-dominated documents: chroma tokenization dominates on pathologically code-dense input (`BenchmarkRender`, 1200 snippets, ~227 ms) — lazy viewport highlighting is the backlog lever if that ever matters in practice.
+- **Performance budget:** parse+render of a 200 KB document must stay **under 100 ms** (`BenchmarkRenderProse` tracks this; don't gate CI on it). Currently ~24 ms on an idle machine (23.9–26.6 ms observed). Measure against the previous commit back to back rather than from memory — background load alone moved this reading past 60 ms, which reads exactly like a regression. The budget covers prose-dominated documents: chroma tokenization dominates on pathologically code-dense input (`BenchmarkRender`, 1200 snippets, ~227 ms) — lazy viewport highlighting is the backlog lever if that ever matters in practice.
 - Spans carry `*lipgloss.Style` pointers into the theme, never style values — copying styles by value made GC dominate render time (3× slowdown). Keep it that way.
 - Half-block mosaics allocate a style per cell run, so their cost is GC and formatting, not decoding — `hexColor` spells out its hex for that reason. A resize over an image-heavy document still costs ~0.7 ms an image; caching the built rows is the lever if that ever matters.
 
 ### CI
-`.github/workflows/ci.yml` runs gofmt -s check, `go vet`, `go test -race`, and golangci-lint on every push/PR. Pushing a `v*` tag triggers `.github/workflows/release.yml`, which runs goreleaser (`.goreleaser.yaml`: linux/darwin/windows × amd64/arm64, version stamped via `-X main.version`, archives include `docs/mdv.1` and `examples/`). The RTK shell wrapper can swallow tool exit codes — gate release-critical checks with `rtk proxy <cmd>`.
+`.github/workflows/ci.yml` runs gofmt -s check, `go vet`, `go test -race`, and golangci-lint on every push/PR. Pushing a `v*` tag triggers `.github/workflows/release.yml`, which stamps the tag into the man page's `.TH` line and then runs goreleaser (`.goreleaser.yaml`: linux/darwin/windows/freebsd × amd64/arm64, version stamped via `-X main.version`, archives carry the binary at their root plus `LICENSE`, `docs/mdv.1` and `examples/` — the layout `install.sh` and `internal/selfupdate` both unpack). The stamping step marks the man page `assume-unchanged` afterwards: goreleaser refuses to build from a dirty tree, and that is narrower than skipping its validation wholesale. Validate release changes with `goreleaser release --snapshot --clean` before cutting a tag — a broken release workflow is only discovered by tagging, and a published tag cannot be moved. The RTK shell wrapper can swallow tool exit codes — gate release-critical checks with `rtk proxy <cmd>`.
 
 ---
 
@@ -159,9 +163,9 @@ Future packages (`internal/nav`, `internal/img`, `internal/editor`) are created 
 - [x] **v0.3 — links & flow:** hint mode + mouse follow; unified jumplist (`Ctrl+O`/`Ctrl+I`); relative-doc + GitHub-slug anchor resolution; `xdg-open` for URLs; `e` editor integration via `vim +N`; watch mode.
 - [x] **v0.4 — images:** half-block mosaic fallback; Kitty protocol with Unicode placeholders.
 - [x] **v0.5 — LaTeX math:** `$`/`$$` goldmark extension; go-latex/latex rendering through the image pipeline; raw-TeX fallback.
-- [x] **v1.0 — polish:** external YAML themes; per-file reading-position persistence (XDG state dir); `y` yank code block via OSC 52; `--width` flag; goreleaser + man page.
-- [x] **v1.1 — installability:** `~/.MDView` config dir (auto-seeded `config.yaml` + `theme.yaml`); `install.sh` (`curl | sh`, OS/arch detection, checksum verify, PATH setup in shell rc); README; FreeBSD builds; shellcheck in CI.
-- [x] **v1.2 — hardening, config & reach:**
+- [x] **v1.0 — polish** (released `v1.0.0`): external YAML themes; per-file reading-position persistence (XDG state dir); `y` yank code block via OSC 52; `--width` flag; goreleaser + man page.
+- [x] **v1.1 — installability** (released `v1.1.0`): `~/.MDView` config dir (auto-seeded `config.yaml` + `theme.yaml`); `install.sh` (`curl | sh`, OS/arch detection, checksum verify, PATH setup in shell rc); README; FreeBSD builds; shellcheck in CI.
+- [x] **v1.2 — hardening, config & reach** (released `v1.2.0`, man page corrected in `v1.2.2`):
   - *Hardening:* control-character sanitization across every text path, OSC 8 destinations, the TOC and the status bar; `http`/`https`/`mailto` allowlist for the system opener; platform opener dispatch (`open`/`rundll32`/`xdg-open`); per-editor line arguments (`code --goto`, `subl`/`hx` `file:line`); surfaced `/dev/tty` write failures; piped input falls back to a plain-text render when no terminal can supply keys.
   - *Performance:* memoized LaTeX rasterization (`rasterCache`), `hexColor` without a format string — a resize on an image-and-equation document went from 38 ms a frame to 6 ms.
   - *Config:* remappable keymap via `~/.MDView/keys.yaml` with a generated `?` overlay; kitty detection covering WezTerm and refusing tmux/screen.
