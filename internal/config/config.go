@@ -41,6 +41,15 @@ func ThemePath() string {
 	return filepath.Join(d, "theme.yaml")
 }
 
+// KeysPath is the user keymap file inside the config directory.
+func KeysPath() string {
+	d := Dir()
+	if d == "" {
+		return ""
+	}
+	return filepath.Join(d, "keys.yaml")
+}
+
 // Ensure creates ~/.MDView and seeds config.yaml and theme.yaml with
 // commented templates when missing, then loads config.yaml. Missing or
 // empty files mean defaults; only a malformed existing config is an error
@@ -55,6 +64,7 @@ func Ensure() (Config, error) {
 	}
 	seed(filepath.Join(d, "config.yaml"), configTemplate)
 	seed(filepath.Join(d, "theme.yaml"), themeTemplate)
+	seed(filepath.Join(d, "keys.yaml"), keysTemplate)
 
 	data, err := os.ReadFile(filepath.Join(d, "config.yaml"))
 	if err != nil {
@@ -127,4 +137,38 @@ const themeTemplate = `# mdv theme (~/.MDView/theme.yaml)
 #searchcurrent: { fg: "#1e1e2e", bg: "#fab387" }
 #hintlabel: { fg: "#11111b", bg: "#f38ba8", bold: true }
 #chroma: catppuccin-mocha
+`
+
+const keysTemplate = `# mdv keymap (~/.MDView/keys.yaml)
+# Uncomment an action to replace its default keys entirely. An empty list
+# leaves the action unbound. Unknown action names, and a key claimed by two
+# actions, are errors. ctrl+c always quits regardless of what is set here.
+#
+# Key names follow bubbletea: single characters ("j", "G"), "ctrl+d",
+# "alt+x", "up", "down", "left", "right", "home", "end", "pgup", "pgdown",
+# "tab", "esc", and " " for space.
+
+#line-down: [j, down]
+#line-up: [k, up]
+#half-page-down: [d, ctrl+d]
+#half-page-up: [u, ctrl+u]
+#page-down: [" ", pgdown, ctrl+f]
+#page-up: [b, pgup, ctrl+b]
+#top: [g, home]
+#bottom: [G, end]
+
+#search: [/]
+#next-match: [n]
+#prev-match: [N]
+#toc: [t]
+#clear-search: [esc]
+
+#follow-link: [f]
+#jump-back: [ctrl+o]
+#jump-forward: [tab]
+#edit: [e, i]
+#yank: [y]
+
+#help: ["?"]
+#quit: [q]
 `

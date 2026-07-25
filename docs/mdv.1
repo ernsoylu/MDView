@@ -76,6 +76,12 @@ template on first run; command-line flags take precedence.
 .I ~/.MDView/theme.yaml
 User theme, overlaying the built-in adaptive theme key by key. Created as
 a commented template on first run.
+.TP
+.I ~/.MDView/keys.yaml
+User keymap. Listing keys for an action replaces that action's defaults
+entirely; an empty list leaves it unbound. Unknown action names, and a key
+claimed by two actions, are errors. \fBctrl+c\fR always quits. Created as a
+commented template on first run.
 .SH ENVIRONMENT
 .TP
 .B EDITOR

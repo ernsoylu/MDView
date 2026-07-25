@@ -62,6 +62,13 @@ in a fresh shell.
 go install github.com/ernsoylu/MDView/cmd/mdv@latest
 ```
 
+Needs Go 1.25 or newer. On an older Go this still works with the default
+`GOTOOLCHAIN=auto`, which fetches 1.25 for the build; if your distribution
+ships Go with `GOTOOLCHAIN=local`, the build stops with *requires go >=
+1.25.0* and the install script above is the easier route — it needs no Go at
+all. The floor comes from dependencies (`golang.org/x/term`, `chroma`,
+`go-latex`), not from mdv's own sources.
+
 ### Manual
 
 Grab an archive for your platform from the
@@ -104,11 +111,14 @@ mdv file.md | less -R    # non-TTY output is plain text
 | `?` | help overlay |
 | `q` | quit |
 
+Every key in this table is remappable — see `~/.MDView/keys.yaml` below.
+`Ctrl+C` always quits.
+
 Try the guided tour: `mdv examples/demo.md`.
 
 ## Configuration
 
-On first run mdv creates **`~/.MDView/`** with two commented template files:
+On first run mdv creates **`~/.MDView/`** with three commented template files:
 
 - **`~/.MDView/config.yaml`** — viewer settings; flags override them:
 
@@ -131,6 +141,19 @@ On first run mdv creates **`~/.MDView/`** with two commented template files:
 
   A complete example ships in [`examples/nord.yaml`](examples/nord.yaml):
   `mdv --theme examples/nord.yaml examples/demo.md`.
+
+- **`~/.MDView/keys.yaml`** — your keymap. Listing keys for an action
+  replaces its defaults entirely; an empty list leaves it unbound:
+
+  ```yaml
+  line-down: [ctrl+n, down]     # emacs-style movement
+  line-up: [ctrl+p, up]
+  yank: []                      # unbind
+  ```
+
+  Unknown action names, and a key claimed by two actions, are reported
+  rather than silently ignored. The `?` overlay is generated from the live
+  keymap, so it always shows the keys you actually have.
 
 Reading positions persist separately under
 `$XDG_STATE_HOME/mdv/positions.json` (default `~/.local/state/mdv/`).
