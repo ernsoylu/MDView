@@ -65,6 +65,31 @@ func TestMosaicColorsAndTransparency(t *testing.T) {
 	}
 }
 
+func TestAlphaFromLuminance(t *testing.T) {
+	fg := [3]uint8{224, 224, 230}
+	// go-latex v0.3.0 draws black glyphs on a transparent background;
+	// older dark-on-opaque-white rasters must keep working too.
+	m := image.NewNRGBA(image.Rect(0, 0, 4, 1))
+	m.SetNRGBA(0, 0, color.NRGBA{0, 0, 0, 0})         // transparent background
+	m.SetNRGBA(1, 0, color.NRGBA{0, 0, 0, 255})       // glyph on transparent
+	m.SetNRGBA(2, 0, color.NRGBA{255, 255, 255, 255}) // opaque white background
+	m.SetNRGBA(3, 0, color.NRGBA{0, 0, 0, 128})       // antialiased edge
+
+	got := AlphaFromLuminance(m, fg)
+	if a := got.RGBAAt(0, 0).A; a != 0 {
+		t.Errorf("transparent background alpha = %d, want 0", a)
+	}
+	if px := got.RGBAAt(1, 0); px.A != 255 || px.R != fg[0] || px.B != fg[2] {
+		t.Errorf("glyph on transparent = %+v, want opaque fg", px)
+	}
+	if a := got.RGBAAt(2, 0).A; a != 0 {
+		t.Errorf("white background alpha = %d, want 0", a)
+	}
+	if a := got.RGBAAt(3, 0).A; a < 100 || a > 156 {
+		t.Errorf("antialiased edge alpha = %d, want ≈128", a)
+	}
+}
+
 func TestRegistry(t *testing.T) {
 	r := NewRegistry()
 	a1, fresh := r.ID("a")
