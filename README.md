@@ -98,9 +98,16 @@ mdv docs/                # browse a directory
 mdv a.md b.md c.md       # several files: the list becomes your buffer list
 mdv https://…/README.md  # fetch a URL
 mdv github.com/owner/repo    # fetch a repository's README
+curl -fsSL https://…/README.md | mdv   # read from stdin
 command | mdv            # read from stdin
 mdv file.md | less -R    # non-TTY output is plain text
 ```
+
+Reading from a pipe leaves stdin used up, so the pager takes its keys from
+the terminal directly. Where there is no terminal to take them from — a
+sandbox, a CI runner, no controlling tty — mdv prints the rendered document
+as plain text rather than failing, so a piped invocation always produces
+something.
 
 With a directory — or no argument at all — mdv lists the markdown files
 underneath, filtered as you type. `Enter` opens, `Esc` leaves, and quitting a

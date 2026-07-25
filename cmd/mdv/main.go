@@ -118,22 +118,33 @@ func main() {
 	// Not a terminal: dump the rendered document and exit. The mono color
 	// profile strips styling and OSC 8 automatically in this case.
 	if !term.IsTerminal(int(os.Stdout.Fd())) {
-		width := 80
-		if c, cerr := strconv.Atoi(os.Getenv("COLUMNS")); cerr == nil && c > 0 {
-			width = c
-		}
-		if *widthFlag > 0 {
-			width = *widthFlag
-		}
-		for _, ln := range render.Render(doc, th, width) {
-			fmt.Println(ln.String())
-		}
+		dump(doc, th, *widthFlag)
 		return
 	}
 
+	// A document read from a pipe leaves stdin exhausted, so the pager has
+	// to take its keys from the terminal directly. Where there is no
+	// terminal to take them from — no controlling tty, a sandbox, a CI
+	// runner — there is nothing to drive a pager with, but the document is
+	// already parsed and printing it beats failing with nothing at all.
+	// "curl … | mdv" should always put the document on screen.
 	if _, err := runPager(doc, th, name, path, cfg, *widthFlag, stdinPiped); err != nil {
-		fmt.Fprintln(os.Stderr, "mdv:", err)
-		os.Exit(1)
+		fmt.Fprintln(os.Stderr, "mdv:", err, "(rendering as plain text)")
+		dump(doc, th, *widthFlag)
+	}
+}
+
+// dump writes the rendered document to stdout as plain text.
+func dump(doc *parser.Doc, th theme.Theme, widthFlag int) {
+	width := 80
+	if c, err := strconv.Atoi(os.Getenv("COLUMNS")); err == nil && c > 0 {
+		width = c
+	}
+	if widthFlag > 0 {
+		width = widthFlag
+	}
+	for _, ln := range render.Render(doc, th, width) {
+		fmt.Println(ln.String())
 	}
 }
 

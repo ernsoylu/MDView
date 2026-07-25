@@ -39,6 +39,12 @@ a time, and relative links inside it do not resolve.
 .PP
 When standard output is not a terminal, the rendered document is written as
 plain text instead.
+.PP
+Markdown piped on standard input leaves it used up, so the pager reads its
+keys from the terminal directly. Where no terminal can supply them — a
+sandbox, a CI runner, no controlling tty — mdv reports why and prints the
+rendered document as plain text rather than failing, so a piped invocation
+always produces output.
 .SH OPTIONS
 .TP
 .BI \-theme " name"
