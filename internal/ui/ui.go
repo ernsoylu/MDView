@@ -85,7 +85,15 @@ type Model struct {
 	hintPrefix string
 
 	keys map[string]action // normal-mode bindings, overridable via keys.yaml
+
+	// hardQuit distinguishes ctrl+c from q: started from the browser, q
+	// goes back to the list and ctrl+c leaves mdv.
+	hardQuit bool
 }
+
+// HardQuit reports whether the pager was left with ctrl+c rather than the
+// quit key.
+func (m Model) HardQuit() bool { return m.hardQuit }
 
 func New(doc *parser.Doc, th theme.Theme, name, path string) Model {
 	m := Model{doc: doc, th: th, name: name, path: path, outline: render.Outline(doc), cur: -1}
@@ -252,6 +260,7 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		m.flash = ""
 		if msg.Type == tea.KeyCtrlC {
+			m.hardQuit = true
 			return m, m.quitCmd()
 		}
 		switch m.mode {
@@ -520,18 +529,20 @@ func (m Model) statusView() string {
 // the left side carries document-derived text — filenames, link targets in
 // flash messages — that must not reach the terminal as escape sequences.
 func (m Model) statusLine(left, right string) string {
-	left, right = render.Sanitize(left), render.Sanitize(right)
-	gap := m.width - runewidth.StringWidth(left) - runewidth.StringWidth(right)
-	if gap < 1 {
-		keep := m.width - runewidth.StringWidth(right) - 1
-		if keep < 1 {
-			keep = 1
-		}
-		left = runewidth.Truncate(left, keep, "… ")
-		gap = m.width - runewidth.StringWidth(left) - runewidth.StringWidth(right)
-		if gap < 0 {
-			gap = 0
-		}
+	return m.th.StatusBar.Render(fitRow(render.Sanitize(left), render.Sanitize(right), m.width))
+}
+
+// fitRow lays left and right on a row of at most width cells, trimming the
+// left side first and the right side too when even it will not fit — a
+// status bar wider than the terminal wraps and costs a line of content.
+func fitRow(left, right string, width int) string {
+	if width < 1 {
+		return ""
 	}
-	return m.th.StatusBar.Render(left + strings.Repeat(" ", gap) + right)
+	if runewidth.StringWidth(right) >= width {
+		return runewidth.Truncate(right, width, "…")
+	}
+	left = runewidth.Truncate(left, width-runewidth.StringWidth(right), "… ")
+	gap := width - runewidth.StringWidth(left) - runewidth.StringWidth(right)
+	return left + strings.Repeat(" ", max(0, gap)) + right
 }
