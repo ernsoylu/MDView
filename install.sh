@@ -36,17 +36,18 @@ case "$arch" in
 	*) die "unsupported architecture: $arch" ;;
 esac
 
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
 say "Finding the latest release..."
-tag=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" |
-	grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+curl -fsSL -o "$tmp/release.json" "https://api.github.com/repos/$REPO/releases/latest" ||
+	die "could not reach the release feed"
+tag=$(grep '"tag_name"' "$tmp/release.json" | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
 [ -n "$tag" ] || die "could not determine the latest release"
 version=${tag#v}
 
 asset="mdv_${version}_${goos}_${goarch}.tar.gz"
 base="https://github.com/$REPO/releases/download/$tag"
-
-tmp=$(mktemp -d)
-trap 'rm -rf "$tmp"' EXIT
 
 say "Downloading $asset ($tag)..."
 curl -fsSL -o "$tmp/$asset" "$base/$asset" ||
@@ -100,6 +101,31 @@ case ":$PATH:" in
 		say "Open a new shell (or run: . $rc) so 'mdv' is found."
 		;;
 esac
+
+say ""
+say "Release notes: https://github.com/$REPO/releases/tag/$tag"
+
+# Show this release's notes in the viewer that was just installed — the
+# first thing mdv renders is its own changelog. Needs a JSON reader for the
+# release body, and a terminal to render into; without either, the URL
+# above is the fallback. Never fatal: the install already succeeded.
+notes_body="$tmp/notes-body.md"
+if command -v python3 >/dev/null 2>&1; then
+	python3 -c 'import json,sys; sys.stdout.write(json.load(open(sys.argv[1])).get("body") or "")' \
+		"$tmp/release.json" >"$notes_body" 2>/dev/null || : >"$notes_body"
+elif command -v jq >/dev/null 2>&1; then
+	jq -r '.body // ""' "$tmp/release.json" >"$notes_body" 2>/dev/null || : >"$notes_body"
+else
+	: >"$notes_body"
+fi
+
+if [ -s "$notes_body" ] && [ -t 1 ]; then
+	notes="$tmp/notes.md"
+	{ printf '# mdv %s\n\n' "$tag"; cat "$notes_body"; } >"$notes"
+	say ""
+	say "Opening the release notes — press q to quit."
+	"$INSTALL_DIR/mdv" "$notes" || :
+fi
 
 say ""
 say "Done. Try:  mdv --version"

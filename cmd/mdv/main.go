@@ -29,6 +29,7 @@ func main() {
 	versionFlag := flag.Bool("version", false, "print version and exit")
 	flag.Usage = func() {
 		fmt.Fprintln(os.Stderr, "usage: mdv [flags] [file.md | directory | files... | URL]")
+		fmt.Fprintln(os.Stderr, "       mdv update [--check]   update to the newest release")
 		fmt.Fprintln(os.Stderr, "       markdown on stdin is read when piped")
 		flag.PrintDefaults()
 	}
@@ -49,6 +50,12 @@ func main() {
 
 	args := flag.Args()
 	stdinPiped := !term.IsTerminal(int(os.Stdin.Fd()))
+
+	// "mdv update" replaces the binary from the newest release. A real file
+	// by that name still wins, so the subcommand cannot shadow a document.
+	if len(args) >= 1 && args[0] == "update" && !fileExists(args[0]) {
+		os.Exit(runUpdate(len(args) > 1 && (args[1] == "--check" || args[1] == "-check")))
+	}
 
 	// A directory, several files, or no argument at all on a terminal all
 	// go through the browser; one argument names a document to render.
@@ -132,6 +139,13 @@ func main() {
 		fmt.Fprintln(os.Stderr, "mdv:", err, "(rendering as plain text)")
 		dump(doc, th, *widthFlag)
 	}
+}
+
+// fileExists reports whether path names something on disk, so a document
+// can outrank a subcommand of the same name.
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // dump writes the rendered document to stdout as plain text.

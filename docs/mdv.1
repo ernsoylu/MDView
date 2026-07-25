@@ -14,6 +14,9 @@ mdv \- full-screen terminal Markdown viewer
 .B mdv
 [\fIflags\fR] \fIURL\fR
 .br
+.B mdv update
+[\fB--check\fR]
+.br
 .I command
 |
 .B mdv
@@ -45,6 +48,17 @@ keys from the terminal directly. Where no terminal can supply them — a
 sandbox, a CI runner, no controlling tty — mdv reports why and prints the
 rendered document as plain text rather than failing, so a piped invocation
 always produces output.
+.SS Updating
+.B mdv update
+fetches the repository's newest release, verifies the archive against the
+release's \fIchecksums.txt\fR, and replaces the running binary in place. It
+uses the same asset names and checksums as the install script, so a binary
+installed either way can be updated either way.
+.B mdv update --check
+only reports whether a newer release exists. A build from source reports its
+version as \fIdev\fR and is always considered older than a release. If the
+binary sits somewhere unwritable, mdv says so and leaves the existing one
+untouched.
 .SH OPTIONS
 .TP
 .BI \-theme " name"
