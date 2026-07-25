@@ -83,7 +83,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### 6. LaTeX Math (implemented v0.5)
 - `$...$` (inline) and `$$...$$` (display) parsed by `internal/mathext`, a goldmark extension with conservative rules: dollar amounts (`$5 and $10`) stay text, and documents without math are unaffected.
 - Display math rasterizes via [go-latex/latex](https://codeberg.org/go-latex/latex) v0.3.0 (`mtex` + `drawimg`, 28pt @ 130dpi) through the v0.4 image pipeline capped at 8 rows, recolored by `img.AlphaFromLuminance` so glyphs blend into light or dark backgrounds.
-- **Subset caveat:** go-latex v0.3.0 *panics* on TeX it cannot typeset — including all superscripts/subscripts (`ast.Sup`/`ast.Sub` unimplemented upstream). `renderMath` recovers and falls back to the raw TeX styled like a code block; inline math always stays raw. Revisit the pin when upstream implements sup/sub (fractions, roots, Greek, and function notation do render today).
+- **Subset caveat:** go-latex v0.3.0 *panics* on TeX it cannot typeset — including all superscripts/subscripts (`ast.Sup`/`ast.Sub` unimplemented upstream). `rasterizeMath` recovers and falls back to the raw TeX styled like a code block; inline math always stays raw. Revisit the pin when upstream implements sup/sub (fractions, roots, Greek, and function notation do render today).
+- **Rasterization is memoized** (`mathCache`, keyed by expression + light/dark foreground) because it dominates a render pass: ~3.8 ms per expression against ~78 µs to decode an image and ~73 µs to build its mosaic, and `reflow()` re-renders on every resize. Failures are cached too — the sup/sub fallback above costs ~168 µs a retry. The cache resets past 256 entries, degrading to the uncached behavior rather than growing without limit. `BenchmarkMathReflow` tracks the repeat-render path.
 
 ### 7. Keymap (implemented)
 | Keys | Action |
@@ -136,9 +137,10 @@ Future packages (`internal/nav`, `internal/img`, `internal/editor`) are created 
 
 ### Testing Conventions
 - Golden tests always use `theme.Plain()` (no ANSI, no OSC 8) so files stay readable and deterministic.
-- Renderer invariants: no `\n` inside a `Line`; rendered width ≤ requested width (fuzz asserts no panics).
+- Renderer invariants: no `\n` inside a `Line`; rendered width ≤ requested width; no C0/C1 control character inside a `Span` (fuzz asserts all three, plus no panics).
 - **Performance budget:** parse+render of a 200 KB document must stay **under 100 ms** (`BenchmarkRenderProse` tracks this; don't gate CI on it). Currently ~47 ms. The budget covers prose-dominated documents: chroma tokenization dominates on pathologically code-dense input (`BenchmarkRender`, 1200 snippets, ~227 ms) — lazy viewport highlighting is the backlog lever if that ever matters in practice.
 - Spans carry `*lipgloss.Style` pointers into the theme, never style values — copying styles by value made GC dominate render time (3× slowdown). Keep it that way.
+- Half-block mosaics allocate a style per cell run, so their cost is GC and formatting, not decoding — `hexColor` spells out its hex for that reason. A resize over an image-heavy document still costs ~0.7 ms an image; caching the built rows is the lever if that ever matters.
 
 ### CI
 `.github/workflows/ci.yml` runs gofmt -s check, `go vet`, `go test -race`, and golangci-lint on every push/PR. Pushing a `v*` tag triggers `.github/workflows/release.yml`, which runs goreleaser (`.goreleaser.yaml`: linux/darwin/windows × amd64/arm64, version stamped via `-X main.version`, archives include `docs/mdv.1` and `examples/`). The RTK shell wrapper can swallow tool exit codes — gate release-critical checks with `rtk proxy <cmd>`.
