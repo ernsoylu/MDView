@@ -67,7 +67,7 @@ func (r *renderer) imageBlock(n *ast.Image, width int) []Line {
 	if alt == "" {
 		alt = "image"
 	}
-	caption := []seg{{text: "🖼 " + alt + " (" + target + ")", style: &r.th.Dim}}
+	caption := []seg{{text: sanitize("🖼 " + alt + " (" + target + ")"), style: &r.th.Dim}}
 	return append(out, wrap(caption, width, srcLine)...)
 }
 

@@ -511,7 +511,11 @@ func (m Model) statusView() string {
 	return m.statusLine(left, right)
 }
 
+// statusLine lays out the one-row status bar. Both halves are sanitized:
+// the left side carries document-derived text — filenames, link targets in
+// flash messages — that must not reach the terminal as escape sequences.
 func (m Model) statusLine(left, right string) string {
+	left, right = render.Sanitize(left), render.Sanitize(right)
 	gap := m.width - runewidth.StringWidth(left) - runewidth.StringWidth(right)
 	if gap < 1 {
 		keep := m.width - runewidth.StringWidth(right) - 1

@@ -21,10 +21,14 @@ type seg struct {
 }
 
 // inlines flattens the inline children of a block node into a seg stream.
-// base may be nil for unstyled text.
+// base may be nil for unstyled text. Every inline path bottoms out here, so
+// this is where document text loses its control characters.
 func (r *renderer) inlines(parent ast.Node, base *lipgloss.Style) []seg {
 	var out []seg
 	r.inlineChildren(parent, base, "", &out)
+	for i := range out {
+		out[i].text = sanitize(out[i].text)
+	}
 	return out
 }
 
