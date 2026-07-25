@@ -114,7 +114,7 @@ func TestYankPicksNearestBlock(t *testing.T) {
 		t.Fatal("y produced no command")
 	}
 	msg, ok := cmd().(flashMsg)
-	if !ok || !strings.Contains(string(msg), "2 code line") {
+	if !ok || !strings.Contains(string(msg), "2 code lines") {
 		t.Errorf("yank message = %#v, want a 2-line confirmation", msg)
 	}
 	if len(wrote) != 1 || !strings.HasPrefix(wrote[0], "\x1b]52;c;") {

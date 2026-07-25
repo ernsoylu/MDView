@@ -194,3 +194,41 @@ func TestSeededTemplateUncommentsCleanly(t *testing.T) {
 			len(keys), len(defaultKeymap()))
 	}
 }
+
+// TestCountPluralises guards the status bar against "1 matches".
+func TestCountPluralises(t *testing.T) {
+	cases := []struct {
+		n    int
+		want string
+	}{
+		{0, "0 matches"},
+		{1, "1 match"},
+		{2, "2 matches"},
+		{11, "11 matches"},
+	}
+	for _, tc := range cases {
+		if got := count(tc.n, "match", "matches"); got != tc.want {
+			t.Errorf("count(%d) = %q, want %q", tc.n, got, tc.want)
+		}
+	}
+}
+
+// TestSearchStatusPluralises covers the string as the status bar builds it,
+// not just the helper.
+func TestSearchStatusPluralises(t *testing.T) {
+	m := keyModel(t, nil)
+	m.mode = modeSearch
+
+	m.matches = []match{{line: 0}}
+	if got := m.statusView(); !strings.Contains(got, "1 match ") {
+		t.Errorf("one match reads %q, want \"1 match\"", strings.TrimSpace(got))
+	}
+	m.matches = []match{{line: 0}, {line: 1}}
+	if got := m.statusView(); !strings.Contains(got, "2 matches") {
+		t.Errorf("two matches reads %q", strings.TrimSpace(got))
+	}
+	m.matches = nil
+	if got := m.statusView(); !strings.Contains(got, "0 matches") {
+		t.Errorf("no matches reads %q", strings.TrimSpace(got))
+	}
+}
