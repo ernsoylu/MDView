@@ -159,6 +159,13 @@ func runPager(doc *parser.Doc, th theme.Theme, name, path string, cfg config.Con
 	default:
 		fmt.Fprintf(os.Stderr, "mdv: config: unknown images mode %q (using auto)\n", cfg.Images)
 	}
+	if cfg.Mermaid {
+		if mmdc := render.LookupMermaid(); mmdc != "" {
+			m = m.WithMermaid(mmdc)
+		} else {
+			fmt.Fprintln(os.Stderr, "mdv: config: mermaid is on but mmdc is not on PATH; leaving fences as code")
+		}
+	}
 	opts := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion()}
 	if stdinPiped {
 		opts = append(opts, tea.WithInputTTY())

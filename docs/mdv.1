@@ -91,8 +91,13 @@ Help overlay; quit.
 .SH FILES
 .TP
 .I ~/.MDView/config.yaml
-Viewer settings (theme, width, editor, images). Created with a commented
-template on first run; command-line flags take precedence.
+Viewer settings (theme, width, editor, images, mermaid). Created with a
+commented template on first run; command-line flags take precedence.
+.IP
+\fBmermaid\fR renders mermaid fences as diagrams through mermaid-cli
+(\fBmmdc\fR on PATH) and is off by default: mmdc drives a headless browser
+over content that came from the document. Off, missing, or failing to
+compile, the fence stays a syntax-highlighted code block.
 .TP
 .I ~/.MDView/theme.yaml
 User theme, overlaying the built-in adaptive theme key by key. Created as

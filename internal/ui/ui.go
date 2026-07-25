@@ -58,9 +58,10 @@ type Model struct {
 	opener  func(string) error   // external opener, replaceable in tests
 	tty     func([]string) error // raw terminal writer, replaceable in tests
 
-	imageMode render.ImageMode
-	imgIDs    *img.Registry
-	pendingTx []string // kitty transmissions awaiting a write to the tty
+	imageMode  render.ImageMode
+	mermaidCmd string // mermaid-cli path; "" leaves fences as code
+	imgIDs     *img.Registry
+	pendingTx  []string // kitty transmissions awaiting a write to the tty
 
 	store       *state.Store // reading-position persistence; nil disables
 	restoreLine int          // saved position to apply on the next reflow
@@ -148,6 +149,12 @@ func (m Model) WithEditor(ed string) Model {
 // WithImages overrides the detected image mode.
 func (m Model) WithImages(mode render.ImageMode) Model {
 	m.imageMode = mode
+	return m
+}
+
+// WithMermaid enables ```mermaid rendering through the given mermaid-cli.
+func (m Model) WithMermaid(cmd string) Model {
+	m.mermaidCmd = cmd
 	return m
 }
 
@@ -461,7 +468,7 @@ func (m *Model) reflow() {
 	if w > m.maxWidth {
 		w = m.maxWidth
 	}
-	opts := render.Options{Images: m.imageMode, IDs: m.imgIDs}
+	opts := render.Options{Images: m.imageMode, IDs: m.imgIDs, MermaidCmd: m.mermaidCmd}
 	if m.path != "" {
 		opts.BaseDir = filepath.Dir(m.path)
 	}

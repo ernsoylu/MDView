@@ -8,17 +8,9 @@ import (
 	"testing"
 )
 
-func resetMathCache() {
-	mathCache.Lock()
-	clear(mathCache.entries)
-	mathCache.Unlock()
-}
+func resetMathCache() { mathCache.reset() }
 
-func mathCacheLen() int {
-	mathCache.Lock()
-	defer mathCache.Unlock()
-	return len(mathCache.entries)
-}
+func mathCacheLen() int { return mathCache.len() }
 
 // TestMathCacheReusesRaster is the whole point of the cache: rasterizing
 // dominates a render pass, so a repeated expression must not redo it.
