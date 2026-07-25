@@ -23,7 +23,9 @@ mdv README.md
 - **Fuzzy table of contents** (`t`): type a few letters, jump to any heading.
 - **Browse a tree**: `mdv` with no argument lists the markdown files under
   the current directory, filtered as you type; quitting a document returns
-  to the list.
+  to the list. Several files on the command line share that list.
+- **Read remote docs**: `mdv https://…/README.md`, or
+  `mdv github.com/owner/repo` for a repository's README.
 - **Follow links like a browser**: press `f` for vimium-style hint labels or
   just click. Anchors and relative `.md` files open in mdv (GitHub-compatible
   heading slugs); web links open in your browser. `Ctrl+O`/`Tab` walk the
@@ -92,6 +94,9 @@ go build -ldflags="-s -w" -o bin/mdv ./cmd/mdv
 mdv [flags] file.md
 mdv                      # browse markdown under the current directory
 mdv docs/                # browse a directory
+mdv a.md b.md c.md       # several files: the list becomes your buffer list
+mdv https://…/README.md  # fetch a URL
+mdv github.com/owner/repo    # fetch a repository's README
 command | mdv            # read from stdin
 mdv file.md | less -R    # non-TTY output is plain text
 ```
@@ -100,6 +105,16 @@ With a directory — or no argument at all — mdv lists the markdown files
 underneath, filtered as you type. `Enter` opens, `Esc` leaves, and quitting a
 document comes back to the list; `Ctrl+C` leaves outright. Dot directories
 and dependency trees (`node_modules`, `vendor`, `target`) are skipped.
+
+Naming several files uses the same list, so it doubles as a buffer list:
+quitting one document drops you back among the others.
+
+Remote documents are fetched over HTTP with a 20s timeout and an 8 MiB cap.
+`github.com/owner/repo` resolves to the repository's README, and a
+`github.com/owner/repo/blob/…` link resolves to the file it points at.
+Fetching is one document at a time — remote and local arguments cannot be
+mixed — and relative links inside a fetched document do not resolve, the
+same as for stdin.
 
 | Flag | Meaning |
 |---|---|

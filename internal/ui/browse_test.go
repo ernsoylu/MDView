@@ -39,10 +39,10 @@ func tree(t *testing.T) string {
 	return root
 }
 
-func rels(entries []fileEntry) []string {
+func rels(entries []FileEntry) []string {
 	out := make([]string, len(entries))
 	for i, e := range entries {
-		out[i] = filepath.ToSlash(e.rel)
+		out[i] = filepath.ToSlash(e.Rel)
 	}
 	return out
 }
@@ -96,9 +96,9 @@ func TestBrowserFiltersAndPicks(t *testing.T) {
 // separately: typing a filename should not rank a path that merely
 // contains the letters above it.
 func TestBrowserPrefersBasenameMatches(t *testing.T) {
-	entries := []fileEntry{
-		{rel: "some/introduction/notes.md", abs: "/a"},
-		{rel: "api.md", abs: "/b"},
+	entries := []FileEntry{
+		{Rel: "some/introduction/notes.md", Abs: "/a"},
+		{Rel: "api.md", Abs: "/b"},
 	}
 	b := NewBrowser("/", entries, false, theme.Plain())
 	for _, r := range "api" {
@@ -108,7 +108,7 @@ func TestBrowserPrefersBasenameMatches(t *testing.T) {
 	if len(b.filtered) == 0 {
 		t.Fatal("no matches for \"api\"")
 	}
-	if got := entries[b.filtered[0]].rel; got != "api.md" {
+	if got := entries[b.filtered[0]].Rel; got != "api.md" {
 		t.Errorf("best match is %q, want api.md", got)
 	}
 }

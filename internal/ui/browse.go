@@ -25,20 +25,41 @@ var skipDirs = map[string]bool{
 	"node_modules": true, "vendor": true, "target": true,
 }
 
-type fileEntry struct {
-	rel, abs string
+// FileEntry is one markdown file the browser can open: Rel is what the
+// list shows, Abs is what gets read.
+type FileEntry struct {
+	Rel, Abs string
+}
+
+// EntriesFromPaths builds a browser list from explicit paths, for the
+// several-files-on-the-command-line case. Each must exist and be readable.
+func EntriesFromPaths(paths []string) ([]FileEntry, error) {
+	out := make([]FileEntry, 0, len(paths))
+	for _, p := range paths {
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			return nil, err
+		}
+		if fi, err := os.Stat(abs); err != nil {
+			return nil, err
+		} else if fi.IsDir() {
+			return nil, fmt.Errorf("%s is a directory", p)
+		}
+		out = append(out, FileEntry{Rel: render.Sanitize(p), Abs: abs})
+	}
+	return out, nil
 }
 
 // FindMarkdown walks root for markdown files, skipping dot directories and
 // dependency trees. Unreadable subdirectories are stepped over rather than
 // failing the whole walk — a browser that shows most of a tree beats one
 // that shows none of it.
-func FindMarkdown(root string) ([]fileEntry, bool, error) {
+func FindMarkdown(root string) ([]FileEntry, bool, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, false, err
 	}
-	var out []fileEntry
+	var out []FileEntry
 	truncated := false
 	err = filepath.WalkDir(abs, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -64,14 +85,14 @@ func FindMarkdown(root string) ([]fileEntry, bool, error) {
 			if rerr != nil {
 				rel = path
 			}
-			out = append(out, fileEntry{rel: render.Sanitize(rel), abs: path})
+			out = append(out, FileEntry{Rel: render.Sanitize(rel), Abs: path})
 		}
 		return nil
 	})
 	if err != nil {
 		return nil, false, err
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].rel < out[j].rel })
+	sort.Slice(out, func(i, j int) bool { return out[i].Rel < out[j].Rel })
 	return out, truncated, nil
 }
 
@@ -79,7 +100,7 @@ func FindMarkdown(root string) ([]fileEntry, bool, error) {
 // or started with no argument at all.
 type Browser struct {
 	root      string
-	entries   []fileEntry
+	entries   []FileEntry
 	truncated bool
 	th        theme.Theme
 
@@ -94,7 +115,7 @@ type Browser struct {
 }
 
 // NewBrowser builds the picker over an already-scanned entry list.
-func NewBrowser(root string, entries []fileEntry, truncated bool, th theme.Theme) Browser {
+func NewBrowser(root string, entries []FileEntry, truncated bool, th theme.Theme) Browser {
 	b := Browser{root: root, entries: entries, truncated: truncated, th: th}
 	b.refilter()
 	return b
@@ -115,10 +136,10 @@ func (b *Browser) refilter() {
 	type scored struct{ idx, score int }
 	var arr []scored
 	for i, e := range b.entries {
-		sc, ok := fuzzyMatch(b.query, filepath.Base(e.rel))
+		sc, ok := fuzzyMatch(b.query, filepath.Base(e.Rel))
 		if ok {
 			sc += 10
-		} else if sc, ok = fuzzyMatch(b.query, e.rel); !ok {
+		} else if sc, ok = fuzzyMatch(b.query, e.Rel); !ok {
 			continue
 		}
 		arr = append(arr, scored{i, sc})
@@ -146,7 +167,7 @@ func (b Browser) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return b, tea.Quit
 		case tea.KeyEnter:
 			if len(b.filtered) > 0 {
-				b.chosen = b.entries[b.filtered[b.sel]].abs
+				b.chosen = b.entries[b.filtered[b.sel]].Abs
 			}
 			return b, tea.Quit
 		case tea.KeyUp, tea.KeyCtrlP, tea.KeyShiftTab:
@@ -202,7 +223,7 @@ func (b Browser) View() string {
 		case len(b.filtered) == 0 && i == 0:
 			sb.WriteString("   (nothing matches)")
 		case fi < len(b.filtered):
-			label := runewidth.Truncate(b.entries[b.filtered[fi]].rel, max(4, b.width-5), "…")
+			label := runewidth.Truncate(b.entries[b.filtered[fi]].Rel, max(4, b.width-5), "…")
 			if fi == b.sel {
 				sb.WriteString(" " + b.th.StatusBar.Render("› "+label))
 			} else {
