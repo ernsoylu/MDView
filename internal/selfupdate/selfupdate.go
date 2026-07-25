@@ -251,7 +251,14 @@ func Replace(dest string, binary []byte) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	if err := os.Chmod(tmpName, 0o755); err != nil {
+	// Take the mode from the binary being replaced rather than inventing
+	// one: a system install and a user install do not want the same
+	// permissions, and an update should never widen access to mdv.
+	fi, err := os.Stat(dest)
+	if err != nil {
+		return fmt.Errorf("cannot read the current binary's permissions: %w", err)
+	}
+	if err := os.Chmod(tmpName, fi.Mode().Perm()); err != nil {
 		return err
 	}
 

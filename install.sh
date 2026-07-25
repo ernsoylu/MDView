@@ -40,9 +40,10 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
 say "Finding the latest release..."
-curl -fsSL -o "$tmp/release.json" "https://api.github.com/repos/$REPO/releases/latest" ||
+release_json=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest") ||
 	die "could not reach the release feed"
-tag=$(grep '"tag_name"' "$tmp/release.json" | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+tag=$(printf '%s' "$release_json" | grep '"tag_name"' | head -1 |
+	sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
 [ -n "$tag" ] || die "could not determine the latest release"
 version=${tag#v}
 
@@ -111,10 +112,11 @@ say "Release notes: https://github.com/$REPO/releases/tag/$tag"
 # above is the fallback. Never fatal: the install already succeeded.
 notes_body="$tmp/notes-body.md"
 if command -v python3 >/dev/null 2>&1; then
-	python3 -c 'import json,sys; sys.stdout.write(json.load(open(sys.argv[1])).get("body") or "")' \
-		"$tmp/release.json" >"$notes_body" 2>/dev/null || : >"$notes_body"
+	printf '%s' "$release_json" |
+		python3 -c 'import json,sys; sys.stdout.write(json.load(sys.stdin).get("body") or "")' \
+			>"$notes_body" 2>/dev/null || : >"$notes_body"
 elif command -v jq >/dev/null 2>&1; then
-	jq -r '.body // ""' "$tmp/release.json" >"$notes_body" 2>/dev/null || : >"$notes_body"
+	printf '%s' "$release_json" | jq -r '.body // ""' >"$notes_body" 2>/dev/null || : >"$notes_body"
 else
 	: >"$notes_body"
 fi
