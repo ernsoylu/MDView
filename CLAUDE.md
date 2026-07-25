@@ -105,6 +105,8 @@ Normal-mode bindings come from the `commands` table in `internal/ui/keymap.go`, 
 | `Ctrl+O` / `Tab` | jumplist back / forward (`Ctrl+I` arrives as Tab in terminals) |
 | `e` / `i` | suspend and edit at the current line via `$EDITOR` (default `vim +N`) |
 | `y` | yank the nearest code block to the clipboard (OSC 52) |
+| `v` / `V` | visual-line selection: scroll keys extend it, `y` copies the selected lines' **markdown source** (OSC 52), `esc` cancels. Selection is by rendered line and maps to source through the IR's `SourceLine`, so a partly-selected wrapped block copies that block's full source; a selection inside one code block copies exactly the covered code lines |
+| `#` | toggle a source-line-number gutter (dim, per source line, blank on wrapped continuations; content reflows around it) |
 | `?` | toggle help overlay |
 | `q` / `Ctrl+C` | quit (persists reading position) |
 

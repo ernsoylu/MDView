@@ -80,6 +80,7 @@ type themeFile struct {
 	SearchHit     *styleSpec `yaml:"searchhit"`
 	SearchCurrent *styleSpec `yaml:"searchcurrent"`
 	HintLabel     *styleSpec `yaml:"hintlabel"`
+	Selection     *styleSpec `yaml:"selection"`
 	Chroma        string     `yaml:"chroma"`
 }
 
@@ -126,6 +127,7 @@ func Load(path string) (Theme, error) {
 	apply(&t.SearchHit, f.SearchHit)
 	apply(&t.SearchCurrent, f.SearchCurrent)
 	apply(&t.HintLabel, f.HintLabel)
+	apply(&t.Selection, f.Selection)
 	if f.Chroma != "" {
 		t.Chroma = styles.Get(f.Chroma)
 	}
