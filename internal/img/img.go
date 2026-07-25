@@ -59,17 +59,20 @@ type Cell struct {
 	Top, Bottom       [3]uint8
 }
 
-// AlphaFromLuminance converts a dark-on-light raster (like go-latex
-// output) into fg-colored glyphs whose alpha follows pixel darkness, so
-// rasterized math blends into any terminal background.
+// AlphaFromLuminance converts a dark-glyph raster (like go-latex output,
+// black on a transparent background) into fg-colored glyphs whose alpha
+// follows glyph coverage, so rasterized math blends into any terminal
+// background.
 func AlphaFromLuminance(src image.Image, fg [3]uint8) *image.RGBA {
 	b := src.Bounds()
 	dst := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
 	for y := 0; y < b.Dy(); y++ {
 		for x := 0; x < b.Dx(); x++ {
-			r, g, bl, _ := src.At(b.Min.X+x, b.Min.Y+y).RGBA()
-			lum := (r + g + bl) / 3 >> 8
-			a := uint32(255 - lum)
+			r, g, bl, sa := src.At(b.Min.X+x, b.Min.Y+y).RGBA()
+			// RGBA returns premultiplied channels, so coverage is one
+			// subtraction: opaque white → 0, opaque black → full, and
+			// transparent — which premultiplies to black — also → 0.
+			a := (sa - (r+g+bl)/3) >> 8
 			dst.SetRGBA(x, y, color.RGBA{
 				R: uint8(uint32(fg[0]) * a / 255),
 				G: uint8(uint32(fg[1]) * a / 255),
