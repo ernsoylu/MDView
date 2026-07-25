@@ -60,7 +60,8 @@ The script detects your OS and architecture, downloads the latest release,
 verifies its checksum, installs `mdv` to `~/.local/bin` (override with
 `MDV_INSTALL_DIR`), installs the man page, and adds the directory to your
 PATH in `~/.zshrc` / `~/.bashrc` if needed — so `mdv example.md` just works
-in a fresh shell.
+in a fresh shell. When it finishes it opens that release's notes in the mdv
+it just installed.
 
 ### Go
 
@@ -74,6 +75,22 @@ ships Go with `GOTOOLCHAIN=local`, the build stops with *requires go >=
 1.25.0* and the install script above is the easier route — it needs no Go at
 all. The floor comes from dependencies (`golang.org/x/term`, `chroma`,
 `go-latex`), not from mdv's own sources.
+
+### Updating
+
+```sh
+mdv update
+```
+
+Checks the repository's latest release, verifies the download against the
+release `checksums.txt`, and replaces the running binary in place — the same
+assets and the same checksums the install script uses, so a binary installed
+either way updates either way. `mdv update --check` only reports. If mdv
+lives somewhere you cannot write, it says so and points at `sudo` or a
+reinstall rather than half-applying.
+
+A build from source reports its version as `dev` and is always considered
+older than a release, so `mdv update` will move it onto one.
 
 ### Manual
 
@@ -101,6 +118,8 @@ mdv github.com/owner/repo    # fetch a repository's README
 curl -fsSL https://…/README.md | mdv   # read from stdin
 command | mdv            # read from stdin
 mdv file.md | less -R    # non-TTY output is plain text
+mdv update               # update to the newest release
+mdv update --check       # just report whether one is available
 ```
 
 Reading from a pipe leaves stdin used up, so the pager takes its keys from

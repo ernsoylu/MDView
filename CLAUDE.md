@@ -129,8 +129,10 @@ Normal-mode bindings come from the `commands` table in `internal/ui/keymap.go`, 
 
 ### Package Layout
 ```
-cmd/mdv          CLI entry: flags, config precedence, TTY detection, piped-dump mode
+cmd/mdv          CLI entry: flags, config precedence, TTY detection, piped-dump mode, the update subcommand
 internal/config  ~/.MDView seeding and config.yaml loading
+internal/fetch   remote documents: http(s), github.com/owner/repo, blob links
+internal/selfupdate  release lookup, checksum verification, binary replacement
 internal/parser  goldmark setup, Doc with byte-offset → source-line index
 internal/render  AST → styled-line IR: inline flattening, wrapping, tables, chroma
 internal/theme   semantic Theme struct; Default() (adaptive) and Plain(); chroma palette
@@ -161,4 +163,5 @@ Future packages (`internal/nav`, `internal/img`, `internal/editor`) are created 
 - [x] **v1.1 — installability:** `~/.MDView` config dir (auto-seeded `config.yaml` + `theme.yaml`); `install.sh` (`curl | sh`, OS/arch detection, checksum verify, PATH setup in shell rc); README; FreeBSD builds; shellcheck in CI.
 - [x] **v1.2 — hardening & config:** control-character sanitization across every text path, OSC 8 destinations, the TOC and the status bar; `http`/`https`/`mailto` allowlist for the system opener; platform opener dispatch (`open`/`rundll32`/`xdg-open`); per-editor line arguments (`code --goto`, `subl`/`hx` `file:line`); surfaced `/dev/tty` write failures; memoized LaTeX rasterization; remappable keymap via `~/.MDView/keys.yaml` with a generated help overlay; kitty detection covering WezTerm and refusing tmux/screen.
 - [x] **v1.3 — reach:** directory browser (`mdv` with no argument or a directory) — recursive `*.md`/`*.markdown` scan skipping dot dirs and `node_modules`/`vendor`/`target`, capped at 5000, filtered with the TOC's fuzzy ranker; multi-file arguments reuse that list as a buffer list; remote fetch (`internal/fetch`) over http/https with a 20s timeout and 8 MiB cap, `github.com/owner/repo` resolving to the README and `blob` links to raw, one document at a time; **Mermaid** fences through the image pipeline via mermaid-cli, opt-in behind `mermaid:` in config.yaml. **Sixel and iTerm2 are not coming without a renderer change** — see §4.
+- [x] **v1.4 — self-update:** `mdv update` (`internal/selfupdate`) checks the repository's latest release, verifies the archive against the release `checksums.txt`, and swaps the running binary via write-beside-and-rename (Windows moves the old one aside first, since it will not rename over a file in use). Asset names mirror `install.sh` so either installer can update either install; a `dev` build sorts below every release. `install.sh` now renders the new release's notes with the mdv it just installed.
 - **Backlog:** section folding (`za`/`zR`/`zM`), remote image fetching, footnotes, regex search, horizontal scroll for wide content, lazy viewport syntax highlighting.
