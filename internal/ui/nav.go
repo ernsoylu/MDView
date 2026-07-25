@@ -197,10 +197,40 @@ func (m *Model) editorCmd() tea.Cmd {
 	if line < 1 {
 		line = 1
 	}
-	args := append(parts[1:], fmt.Sprintf("+%d", line), m.path)
+	args := editorArgs(parts[0], parts[1:], m.path, line)
 	return tea.ExecProcess(exec.Command(parts[0], args...), func(err error) tea.Msg {
 		return editorDoneMsg{err: err}
 	})
+}
+
+// editorArgs builds the arguments that open path at line for the given
+// editor binary. "+N file" is the common convention — vim, nvim, nano,
+// emacs, kak and micro all take it — but the VS Code family needs a flag to
+// honor a line at all, and a few editors carry the line in the filename.
+func editorArgs(bin string, extra []string, path string, line int) []string {
+	args := make([]string, 0, len(extra)+2)
+	args = append(args, extra...)
+	switch editorName(bin) {
+	case "code", "code-insiders", "codium", "vscodium":
+		return append(args, "--goto", fmt.Sprintf("%s:%d", path, line))
+	case "subl", "sublime_text", "hx", "helix":
+		return append(args, fmt.Sprintf("%s:%d", path, line))
+	default:
+		return append(args, fmt.Sprintf("+%d", line), path)
+	}
+}
+
+// editorName reduces an editor command to the bare binary name. A directory
+// prefix and a Windows executable suffix both hide which editor it is —
+// VS Code's Windows CLI shim is code.cmd, not code.exe.
+func editorName(bin string) string {
+	name := filepath.Base(bin)
+	ext := filepath.Ext(name)
+	switch strings.ToLower(ext) {
+	case ".exe", ".cmd", ".bat":
+		name = name[:len(name)-len(ext)]
+	}
+	return strings.ToLower(name)
 }
 
 // linkAtCell returns the hyperlink target under a terminal cell, if any.

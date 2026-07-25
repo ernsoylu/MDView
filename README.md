@@ -33,7 +33,8 @@ mdv README.md
 - **Live reload**: edits from any editor re-render in place, position kept —
   mdv doubles as a Markdown preview.
 - **Edit in place**: `e` suspends the viewer and opens `$EDITOR` at the line
-  you're reading (`vim +N` style).
+  you're reading — `vim +N` by default, adapted for editors that want the
+  line elsewhere (`code --goto`, `subl`/`hx` `file:line`).
 - **Yank code** (`y`): the nearest code block goes to your clipboard via
   OSC 52.
 - **Remembers your place** per file, restores it on reopen.

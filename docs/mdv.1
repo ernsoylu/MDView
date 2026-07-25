@@ -45,14 +45,22 @@ Table of contents; type to fuzzy-filter, enter jumps.
 .TP
 .B f
 Link hints: type the overlaid label to follow. Clicking a link follows it as
-well. Anchors and relative .md links open in mdv; everything else opens via
-.BR xdg-open (1).
+well. Anchors and relative .md links open in mdv; other links go to the
+desktop handler —
+.BR xdg-open (1)
+on Unix,
+.BR open (1)
+on macOS, rundll32 on Windows. Only http, https and mailto targets are
+followed: a document is untrusted input, and other URI schemes hand it a
+code-execution surface.
 .TP
 .B ctrl+o / tab
 Jumplist back / forward, across documents.
 .TP
 .B e, i
 Suspend and edit the file at the current line with \fB$EDITOR\fR (default vim).
+The line is passed as \fB+N\fR, or in the form the editor expects:
+\fB--goto\fR for the VS Code family, \fIfile:line\fR for subl and hx.
 .TP
 .B y
 Copy the nearest code block to the clipboard (OSC 52).
