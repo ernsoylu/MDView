@@ -17,6 +17,14 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: stable
+      # The man page carries the version in its .TH line, which goes stale
+      # the moment a tag is cut. Stamp the tag into the working copy before
+      # goreleaser packages it — the repo itself is not churned per release.
+      - name: Stamp the man page version
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          sed -i "1s|.*|.TH MDV 1 \"$(date -u +'%B %Y')\" \"mdv ${v}\" \"User Commands\"|" docs/mdv.1
+          head -1 docs/mdv.1
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
