@@ -12,6 +12,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/ernsoylu/MDView/internal/config"
+	"github.com/ernsoylu/MDView/internal/fetch"
 	"github.com/ernsoylu/MDView/internal/parser"
 	"github.com/ernsoylu/MDView/internal/render"
 	"github.com/ernsoylu/MDView/internal/state"
@@ -27,7 +28,8 @@ func main() {
 	widthFlag := flag.Int("width", 0, "maximum content width in columns (0 = terminal width, capped at 120)")
 	versionFlag := flag.Bool("version", false, "print version and exit")
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: mdv [flags] <file.md>   (or pipe markdown on stdin)")
+		fmt.Fprintln(os.Stderr, "usage: mdv [flags] [file.md | directory | files... | URL]")
+		fmt.Fprintln(os.Stderr, "       markdown on stdin is read when piped")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -48,21 +50,31 @@ func main() {
 	args := flag.Args()
 	stdinPiped := !term.IsTerminal(int(os.Stdin.Fd()))
 
-	// A directory — or no argument at all on a terminal — browses instead
-	// of reading a document.
-	browseRoot := ""
-	switch {
-	case len(args) == 1 && args[0] != "-" && ui.IsDir(args[0]):
-		browseRoot = args[0]
-	case len(args) == 0 && !stdinPiped:
-		browseRoot = "."
-	}
+	// A directory, several files, or no argument at all on a terminal all
+	// go through the browser; one argument names a document to render.
+	var browseRoot string
+	var browseList []ui.FileEntry
+	var browseTrunc bool
 
 	var src []byte
 	var name, path string
 	var err error
 	switch {
-	case browseRoot != "":
+	case len(args) == 0 && !stdinPiped:
+		browseRoot = "."
+	case len(args) == 1 && args[0] != "-" && ui.IsDir(args[0]):
+		browseRoot = args[0]
+	case len(args) > 1:
+		for _, a := range args {
+			if fetch.IsRemote(a) {
+				fmt.Fprintln(os.Stderr, "mdv: several files at once are local only; fetch one remote document at a time")
+				os.Exit(2)
+			}
+		}
+		browseRoot = "."
+		browseList, err = ui.EntriesFromPaths(args)
+	case len(args) == 1 && fetch.IsRemote(args[0]):
+		src, name, err = fetch.Get(args[0])
 	case len(args) == 1 && args[0] != "-":
 		src, err = os.ReadFile(args[0])
 		name = args[0]
@@ -80,6 +92,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "mdv:", err)
 		os.Exit(1)
 	}
+	browsing := browseRoot != ""
 
 	th, err := pickTheme(*themeFlag, cfg)
 	if err != nil {
@@ -89,12 +102,12 @@ func main() {
 	if *widthFlag == 0 && cfg.Width > 0 {
 		*widthFlag = cfg.Width
 	}
-	if browseRoot != "" {
+	if browsing {
 		if !term.IsTerminal(int(os.Stdout.Fd())) {
 			fmt.Fprintln(os.Stderr, "mdv: browsing needs a terminal; name a file to render")
 			os.Exit(2)
 		}
-		if err := browse(browseRoot, th, cfg, *widthFlag); err != nil {
+		if err := browse(browseRoot, browseList, browseTrunc, th, cfg, *widthFlag); err != nil {
 			fmt.Fprintln(os.Stderr, "mdv:", err)
 			os.Exit(1)
 		}
@@ -160,10 +173,12 @@ func runPager(doc *parser.Doc, th theme.Theme, name, path string, cfg config.Con
 
 // browse alternates the file picker with the pager: quitting a document
 // comes back to the list, and only the list — or ctrl+c — leaves mdv.
-func browse(root string, th theme.Theme, cfg config.Config, width int) error {
-	entries, truncated, err := ui.FindMarkdown(root)
-	if err != nil {
-		return err
+func browse(root string, entries []ui.FileEntry, truncated bool, th theme.Theme, cfg config.Config, width int) error {
+	if entries == nil { // no explicit list: scan the tree
+		var err error
+		if entries, truncated, err = ui.FindMarkdown(root); err != nil {
+			return err
+		}
 	}
 	for {
 		b := ui.NewBrowser(root, entries, truncated, th)
