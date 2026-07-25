@@ -150,18 +150,33 @@ func TestPlaceholderRows(t *testing.T) {
 }
 
 func TestKittySupported(t *testing.T) {
-	t.Setenv("KITTY_WINDOW_ID", "")
-	t.Setenv("TERM", "xterm-256color")
-	if KittySupported() {
-		t.Error("plain xterm should not report kitty support")
+	cases := []struct {
+		name string
+		env  map[string]string
+		want bool
+	}{
+		{"plain xterm", map[string]string{"TERM": "xterm-256color"}, false},
+		{"kitty by TERM", map[string]string{"TERM": "xterm-kitty"}, true},
+		{"kitty by window id", map[string]string{"TERM": "xterm-256color", "KITTY_WINDOW_ID": "3"}, true},
+		{"ghostty by TERM", map[string]string{"TERM": "xterm-ghostty"}, true},
+		{"ghostty by TERM_PROGRAM", map[string]string{"TERM": "xterm-256color", "TERM_PROGRAM": "ghostty"}, true},
+		{"wezterm by TERM_PROGRAM", map[string]string{"TERM": "xterm-256color", "TERM_PROGRAM": "WezTerm"}, true},
+
+		// A multiplexer will not forward the graphics, whatever the outer
+		// terminal is — and its panes inherit KITTY_WINDOW_ID.
+		{"tmux inheriting kitty env", map[string]string{"TERM": "tmux-256color", "KITTY_WINDOW_ID": "3", "TMUX": "/tmp/tmux-1000/default,123,0"}, false},
+		{"tmux with TERM forced to kitty", map[string]string{"TERM": "xterm-kitty", "TMUX": "/tmp/tmux-1000/default,123,0"}, false},
+		{"screen", map[string]string{"TERM": "screen-256color", "KITTY_WINDOW_ID": "3"}, false},
+		{"screen by STY", map[string]string{"TERM": "xterm-kitty", "STY": "1234.pts-0.host"}, false},
 	}
-	t.Setenv("TERM", "xterm-kitty")
-	if !KittySupported() {
-		t.Error("xterm-kitty should report support")
-	}
-	t.Setenv("TERM", "xterm-256color")
-	t.Setenv("KITTY_WINDOW_ID", "3")
-	if !KittySupported() {
-		t.Error("KITTY_WINDOW_ID should report support")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, k := range []string{"TERM", "TERM_PROGRAM", "KITTY_WINDOW_ID", "TMUX", "STY"} {
+				t.Setenv(k, tc.env[k])
+			}
+			if got := KittySupported(); got != tc.want {
+				t.Errorf("KittySupported() = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

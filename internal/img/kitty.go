@@ -11,13 +11,47 @@ import (
 )
 
 // KittySupported reports whether the terminal understands the kitty
-// graphics protocol (kitty itself and ghostty advertise via environment).
+// graphics protocol, from the environment the terminal advertises itself
+// in.
+//
+// Detection is deliberately not a terminal query. The only capability mdv
+// can act on today is this one — there is no sixel or iTerm2 renderer for a
+// DA1 answer to select — and asking costs a raw-mode read on /dev/tty
+// during startup, which risks swallowing a keystroke meant for the pager if
+// the reply never comes. The config's images key forces the mode outright,
+// which covers the terminals this cannot name. Revisit when a second
+// protocol lands and a query has something to choose between.
 func KittySupported() bool {
+	if underMultiplexer() {
+		return false
+	}
 	if os.Getenv("KITTY_WINDOW_ID") != "" {
 		return true
 	}
+	switch os.Getenv("TERM_PROGRAM") {
+	case "ghostty", "WezTerm":
+		return true
+	}
 	term := os.Getenv("TERM")
-	return strings.Contains(term, "kitty") || strings.Contains(term, "ghostty")
+	for _, name := range []string{"kitty", "ghostty", "wezterm"} {
+		if strings.Contains(term, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// underMultiplexer reports whether tmux or screen sits between mdv and the
+// terminal. Neither forwards APC graphics without being configured for it,
+// and their panes inherit KITTY_WINDOW_ID from whatever started the server
+// — so the environment says kitty while the images go nowhere. Half-block
+// mosaic renders correctly through both.
+func underMultiplexer() bool {
+	if os.Getenv("TMUX") != "" || os.Getenv("STY") != "" {
+		return true
+	}
+	term := os.Getenv("TERM")
+	return strings.HasPrefix(term, "screen") || strings.HasPrefix(term, "tmux")
 }
 
 // Registry hands out stable 24-bit image ids per cache key, so an image is

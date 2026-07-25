@@ -164,9 +164,14 @@ Reading positions persist separately under
 |---|---|
 | Colors | truecolor → 256 → 16 → mono degradation, `NO_COLOR` honored |
 | Clickable links | any OSC 8 terminal (kitty, ghostty, iTerm2, WezTerm, foot, recent GNOME/Windows terminals) |
-| Pixel images & math | kitty, ghostty (kitty graphics protocol) |
-| Mosaic images & math | any color terminal |
+| Pixel images & math | kitty, ghostty, WezTerm (kitty graphics protocol) |
+| Mosaic images & math | any color terminal, and inside tmux/screen |
 | Clipboard yank | any OSC 52 terminal |
+
+Inside tmux or screen mdv uses the mosaic: neither forwards kitty graphics
+without being configured for it, and their panes inherit the outer
+terminal's environment, so the environment alone cannot be trusted. Set
+`images: kitty` in `config.yaml` to override the detection either way.
 
 ## Development
 
