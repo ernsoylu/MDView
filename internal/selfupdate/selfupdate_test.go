@@ -273,3 +273,79 @@ func TestReplaceReportsUnwritableDir(t *testing.T) {
 		t.Errorf("a failed update must leave the old binary intact, got %q", got)
 	}
 }
+
+// TestExtractRefusesOversizedEntry: the archive arrives over the network,
+// so a small download that claims to expand enormously must be refused
+// rather than read into memory.
+func TestExtractRefusesOversizedEntry(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fixture archive is a tar.gz")
+	}
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	// A header claiming far more than the per-entry cap. Nothing is
+	// written for it, so the archive itself stays tiny.
+	_ = tw.WriteHeader(&tar.Header{
+		Name: "mdv", Mode: 0o755, Size: maxBinaryBytes + 1, Typeflag: tar.TypeReg,
+	})
+	_ = tw.Flush()
+	_ = gz.Close()
+
+	if _, err := ExtractBinary(buf.Bytes()); err == nil {
+		t.Fatal("an entry past the size cap should be refused")
+	} else if !strings.Contains(err.Error(), "MiB") {
+		t.Errorf("error = %q, want it to name the limit", err)
+	}
+}
+
+// TestExtractRefusesTooManyEntries bounds the walk itself.
+func TestExtractRefusesTooManyEntries(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fixture archive is a tar.gz")
+	}
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	for i := 0; i < maxArchiveEntries+10; i++ {
+		_ = tw.WriteHeader(&tar.Header{
+			Name: fmt.Sprintf("pad-%d", i), Mode: 0o644, Size: 0, Typeflag: tar.TypeReg,
+		})
+	}
+	_ = tw.Close()
+	_ = gz.Close()
+
+	if _, err := ExtractBinary(buf.Bytes()); err == nil {
+		t.Fatal("an archive past the entry cap should be refused")
+	} else if !strings.Contains(err.Error(), "entries") {
+		t.Errorf("error = %q, want it to name the entry limit", err)
+	}
+}
+
+// TestExtractIgnoresTraversingPaths: entry paths are never used to write
+// anything, so a traversing name simply does not match the binary.
+func TestExtractIgnoresTraversingPaths(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fixture archive is a tar.gz")
+	}
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	payload := []byte("evil")
+	_ = tw.WriteHeader(&tar.Header{
+		Name: "../../../../etc/mdv", Mode: 0o755, Size: int64(len(payload)), Typeflag: tar.TypeReg,
+	})
+	_, _ = tw.Write(payload)
+	_ = tw.Close()
+	_ = gz.Close()
+
+	// It matches on base name, so this is still "the binary" — the point is
+	// that nothing is ever written to the path the archive named.
+	got, err := ExtractBinary(buf.Bytes())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !bytes.Equal(got, payload) {
+		t.Errorf("extracted %q", got)
+	}
+}
