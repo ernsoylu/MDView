@@ -55,17 +55,22 @@ func TestSanitizeControlChars(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			for _, ln := range render.Render(parser.Parse([]byte(tc.src)), theme.Plain(), 40) {
-				for _, sp := range ln.Spans {
-					if hasControl(sp.Text) {
-						t.Errorf("control character survived into span: %q", sp.Text)
-					}
-				}
-				if got := ln.String(); hasControl(got) {
-					t.Errorf("control character survived into output: %q", got)
-				}
-			}
+			assertNoControl(t, render.Render(parser.Parse([]byte(tc.src)), theme.Plain(), 40))
 		})
+	}
+}
+
+func assertNoControl(t *testing.T, lines []render.Line) {
+	t.Helper()
+	for _, ln := range lines {
+		for _, sp := range ln.Spans {
+			if hasControl(sp.Text) {
+				t.Errorf("control character survived into span: %q", sp.Text)
+			}
+		}
+		if got := ln.String(); hasControl(got) {
+			t.Errorf("control character survived into output: %q", got)
+		}
 	}
 }
 

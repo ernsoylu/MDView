@@ -10,6 +10,7 @@ import (
 	"github.com/yuin/goldmark/util"
 
 	"github.com/ernsoylu/MDView/internal/mathext"
+	"github.com/ernsoylu/MDView/internal/theme"
 )
 
 // seg is a styled fragment of inline content before line breaking.
@@ -47,30 +48,13 @@ func (r *renderer) inlineChildren(parent ast.Node, style *lipgloss.Style, link s
 	for c := parent.FirstChild(); c != nil; c = c.NextSibling() {
 		switch n := c.(type) {
 		case *ast.Text:
-			*out = append(*out, seg{text: unescape(string(n.Segment.Value(r.src))), style: style, link: link})
-			if n.HardLineBreak() {
-				*out = append(*out, seg{brk: true})
-			} else if n.SoftLineBreak() {
-				*out = append(*out, seg{text: " ", style: style, link: link})
-			}
+			r.appendText(n, style, link, out)
 		case *ast.String:
 			*out = append(*out, seg{text: string(n.Value), style: style, link: link})
 		case *ast.CodeSpan:
-			// Code span children carry raw segments where line endings are
-			// literal newline bytes; CommonMark says they become spaces.
-			st := merged(&r.th.CodeSpan, style)
-			for gc := n.FirstChild(); gc != nil; gc = gc.NextSibling() {
-				if t, ok := gc.(*ast.Text); ok {
-					txt := strings.ReplaceAll(string(t.Segment.Value(r.src)), "\n", " ")
-					*out = append(*out, seg{text: txt, style: st, link: link})
-				}
-			}
+			r.appendCodeSpan(n, style, link, out)
 		case *ast.Emphasis:
-			st := &r.th.Emph
-			if n.Level >= 2 {
-				st = &r.th.Strong
-			}
-			r.inlineChildren(n, merged(st, style), link, out)
+			r.inlineChildren(n, merged(emphStyle(&r.th, n.Level), style), link, out)
 		case *extast.Strikethrough:
 			r.inlineChildren(n, merged(&r.th.Strike, style), link, out)
 		case *ast.Link:
@@ -79,35 +63,74 @@ func (r *renderer) inlineChildren(parent ast.Node, style *lipgloss.Style, link s
 			url := string(n.URL(r.src))
 			*out = append(*out, seg{text: string(n.Label(r.src)), style: merged(&r.th.Link, style), link: url})
 		case *ast.Image:
-			alt := nodeText(n, r.src)
-			if alt == "" {
-				alt = "image"
-			}
-			url := string(n.Destination)
-			*out = append(*out,
-				seg{text: "🖼 [Image: " + alt + "]", style: merged(&r.th.Image, style), link: url},
-				seg{text: " (" + url + ")", style: &r.th.Dim, link: url},
-			)
+			r.appendImage(n, style, out)
 		case *extast.TaskCheckBox:
-			glyph := "[ ] "
-			if n.IsChecked {
-				glyph = "[✓] "
-			}
-			*out = append(*out, seg{text: glyph, style: &r.th.ListMarker})
+			*out = append(*out, seg{text: taskGlyph(n.IsChecked), style: &r.th.ListMarker})
 		case *mathext.InlineMath:
 			// Inline math always shows its raw TeX, styled like a code span.
 			*out = append(*out, seg{text: "$" + string(n.Value) + "$", style: merged(&r.th.CodeSpan, style), link: link})
 		case *ast.RawHTML:
-			var b strings.Builder
-			for i := 0; i < n.Segments.Len(); i++ {
-				sg := n.Segments.At(i)
-				b.Write(sg.Value(r.src))
-			}
-			*out = append(*out, seg{text: strings.ReplaceAll(b.String(), "\n", " "), style: &r.th.Dim})
+			r.appendRawHTML(n, out)
 		default:
 			r.inlineChildren(c, style, link, out)
 		}
 	}
+}
+
+func emphStyle(th *theme.Theme, level int) *lipgloss.Style {
+	if level >= 2 {
+		return &th.Strong
+	}
+	return &th.Emph
+}
+
+func taskGlyph(checked bool) string {
+	if checked {
+		return "[✓] "
+	}
+	return "[ ] "
+}
+
+func (r *renderer) appendText(n *ast.Text, style *lipgloss.Style, link string, out *[]seg) {
+	*out = append(*out, seg{text: unescape(string(n.Segment.Value(r.src))), style: style, link: link})
+	if n.HardLineBreak() {
+		*out = append(*out, seg{brk: true})
+	} else if n.SoftLineBreak() {
+		*out = append(*out, seg{text: " ", style: style, link: link})
+	}
+}
+
+func (r *renderer) appendCodeSpan(n *ast.CodeSpan, style *lipgloss.Style, link string, out *[]seg) {
+	// Code span children carry raw segments where line endings are
+	// literal newline bytes; CommonMark says they become spaces.
+	st := merged(&r.th.CodeSpan, style)
+	for gc := n.FirstChild(); gc != nil; gc = gc.NextSibling() {
+		if t, ok := gc.(*ast.Text); ok {
+			txt := strings.ReplaceAll(string(t.Segment.Value(r.src)), "\n", " ")
+			*out = append(*out, seg{text: txt, style: st, link: link})
+		}
+	}
+}
+
+func (r *renderer) appendImage(n *ast.Image, style *lipgloss.Style, out *[]seg) {
+	alt := nodeText(n, r.src)
+	if alt == "" {
+		alt = "image"
+	}
+	url := string(n.Destination)
+	*out = append(*out,
+		seg{text: "🖼 [Image: " + alt + "]", style: merged(&r.th.Image, style), link: url},
+		seg{text: " (" + url + ")", style: &r.th.Dim, link: url},
+	)
+}
+
+func (r *renderer) appendRawHTML(n *ast.RawHTML, out *[]seg) {
+	var b strings.Builder
+	for i := 0; i < n.Segments.Len(); i++ {
+		sg := n.Segments.At(i)
+		b.Write(sg.Value(r.src))
+	}
+	*out = append(*out, seg{text: strings.ReplaceAll(b.String(), "\n", " "), style: &r.th.Dim})
 }
 
 // nodeText collects the plain text of a node's descendants (e.g. image alt).

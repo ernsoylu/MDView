@@ -20,99 +20,114 @@ func wrap(segs []seg, width int, srcLine int) []Line {
 	if width < 1 {
 		width = 1
 	}
-	var lines []Line
-	var cur []Span
-	curW := 0
-	pendingSpace := false
-
-	flush := func() {
-		lines = append(lines, Line{Spans: cur, SourceLine: srcLine})
-		cur = nil
-		curW = 0
-		pendingSpace = false
-	}
-
-	var word []frag
-	wordW := 0
-
-	emitWord := func() {
-		if wordW == 0 {
-			return
-		}
-		spaceW := 0
-		if pendingSpace {
-			spaceW = 1
-		}
-		if curW+spaceW+wordW > width && curW > 0 {
-			flush()
-		}
-		if wordW > width {
-			// Chunk an oversize word across as many lines as needed.
-			for _, f := range word {
-				var b strings.Builder
-				bw := 0
-				emit := func() {
-					if b.Len() > 0 {
-						cur = append(cur, Span{Text: b.String(), Style: f.style, Link: f.link})
-						curW += bw
-						b.Reset()
-						bw = 0
-					}
-				}
-				for _, ch := range f.text {
-					chW := runewidth.RuneWidth(ch)
-					if curW+bw+chW > width && curW+bw > 0 {
-						emit()
-						flush()
-					}
-					b.WriteRune(ch)
-					bw += chW
-				}
-				emit()
-			}
-		} else {
-			if pendingSpace && curW > 0 {
-				cur = append(cur, Span{Text: " ", Style: word[0].style, Link: word[0].link})
-				curW++
-			}
-			for _, f := range word {
-				cur = append(cur, Span{Text: f.text, Style: f.style, Link: f.link})
-			}
-			curW += wordW
-		}
-		word = nil
-		wordW = 0
-		pendingSpace = false
-	}
-
+	w := &wrapState{width: width, srcLine: srcLine}
 	for _, s := range segs {
 		if s.brk {
-			emitWord()
-			flush()
+			w.emitWord()
+			w.flush()
 			continue
 		}
-		txt := s.text
-		for txt != "" {
-			i := strings.IndexAny(txt, " \t")
-			if i == -1 {
-				word = append(word, frag{text: txt, style: s.style, link: s.link})
-				wordW += runewidth.StringWidth(txt)
-				break
+		w.feedText(s)
+	}
+	w.emitWord()
+	if len(w.cur) > 0 || len(w.lines) == 0 {
+		w.flush()
+	}
+	return w.lines
+}
+
+type wrapState struct {
+	width, srcLine int
+	lines          []Line
+	cur            []Span
+	curW           int
+	pendingSpace   bool
+	word           []frag
+	wordW          int
+}
+
+func (w *wrapState) flush() {
+	w.lines = append(w.lines, Line{Spans: w.cur, SourceLine: w.srcLine})
+	w.cur = nil
+	w.curW = 0
+	w.pendingSpace = false
+}
+
+func (w *wrapState) emitWord() {
+	if w.wordW == 0 {
+		return
+	}
+	spaceW := 0
+	if w.pendingSpace {
+		spaceW = 1
+	}
+	if w.curW+spaceW+w.wordW > w.width && w.curW > 0 {
+		w.flush()
+	}
+	if w.wordW > w.width {
+		w.chunkWord()
+	} else {
+		w.appendWord()
+	}
+	w.word = nil
+	w.wordW = 0
+	w.pendingSpace = false
+}
+
+func (w *wrapState) appendWord() {
+	if w.pendingSpace && w.curW > 0 {
+		w.cur = append(w.cur, Span{Text: " ", Style: w.word[0].style, Link: w.word[0].link})
+		w.curW++
+	}
+	for _, f := range w.word {
+		w.cur = append(w.cur, Span{Text: f.text, Style: f.style, Link: f.link})
+	}
+	w.curW += w.wordW
+}
+
+// chunkWord hard-breaks an oversize word across as many lines as needed.
+func (w *wrapState) chunkWord() {
+	for _, f := range w.word {
+		var b strings.Builder
+		bw := 0
+		emit := func() {
+			if b.Len() > 0 {
+				w.cur = append(w.cur, Span{Text: b.String(), Style: f.style, Link: f.link})
+				w.curW += bw
+				b.Reset()
+				bw = 0
 			}
-			if i > 0 {
-				word = append(word, frag{text: txt[:i], style: s.style, link: s.link})
-				wordW += runewidth.StringWidth(txt[:i])
-			}
-			emitWord()
-			pendingSpace = true
-			txt = txt[i+1:]
 		}
+		for _, ch := range f.text {
+			chW := runewidth.RuneWidth(ch)
+			if w.curW+bw+chW > w.width && w.curW+bw > 0 {
+				emit()
+				w.flush()
+			}
+			b.WriteRune(ch)
+			bw += chW
+		}
+		emit()
 	}
-	emitWord()
-	if len(cur) > 0 || len(lines) == 0 {
-		flush()
+}
+
+func (w *wrapState) feedText(s seg) {
+	txt := s.text
+	for txt != "" {
+		i := strings.IndexAny(txt, " \t")
+		if i == -1 {
+			w.word = append(w.word, frag{text: txt, style: s.style, link: s.link})
+			w.wordW += runewidth.StringWidth(txt)
+			return
+		}
+		if i > 0 {
+			w.word = append(w.word, frag{text: txt[:i], style: s.style, link: s.link})
+			w.wordW += runewidth.StringWidth(txt[:i])
+		}
+		w.emitWord()
+		w.pendingSpace = true
+		txt = txt[i+1:]
 	}
-	return lines
 }
 
 // chunkSpans hard-breaks spans into rows of at most width columns, used for

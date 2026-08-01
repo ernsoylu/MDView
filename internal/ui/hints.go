@@ -39,28 +39,13 @@ func makeLabels(n int) []string {
 func (m *Model) startHints() {
 	m.hints = nil
 	m.hintPrefix = ""
-	prevLast := ""
 	end := m.offset + m.contentHeight()
 	if end > len(m.lines) {
 		end = len(m.lines)
 	}
+	prevLast := ""
 	for li := m.offset; li < end; li++ {
-		spans := m.lines[li].Spans
-		pos := 0
-		runURL := ""
-		for si, sp := range spans {
-			if sp.Link != runURL {
-				runURL = sp.Link
-				if sp.Link != "" && (si != 0 || sp.Link != prevLast) {
-					m.hints = append(m.hints, hint{line: li, at: pos, url: sp.Link})
-				}
-			}
-			pos += len(sp.Text)
-		}
-		prevLast = ""
-		if len(spans) > 0 {
-			prevLast = spans[len(spans)-1].Link
-		}
+		prevLast = m.collectLineHints(li, prevLast)
 	}
 	if len(m.hints) == 0 {
 		m.flash = "no links visible"
@@ -70,6 +55,27 @@ func (m *Model) startHints() {
 		m.hints[i].label = l
 	}
 	m.mode = modeHints
+}
+
+// collectLineHints appends hints for links starting on line li. prevLast is
+// the link URL ending the previous line (so a wrapped link is not re-hinted).
+func (m *Model) collectLineHints(li int, prevLast string) string {
+	spans := m.lines[li].Spans
+	pos := 0
+	runURL := ""
+	for si, sp := range spans {
+		if sp.Link != runURL {
+			runURL = sp.Link
+			if sp.Link != "" && (si != 0 || sp.Link != prevLast) {
+				m.hints = append(m.hints, hint{line: li, at: pos, url: sp.Link})
+			}
+		}
+		pos += len(sp.Text)
+	}
+	if len(spans) == 0 {
+		return ""
+	}
+	return spans[len(spans)-1].Link
 }
 
 func (m Model) updateHints(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

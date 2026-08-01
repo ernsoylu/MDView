@@ -193,14 +193,28 @@ const helpFooter = `  enter keeps a search · esc closes overlays
 // a third alternative pushes the two-column layout past 80 columns.
 const helpKeysShown = 2
 
+type helpRow struct{ keys, desc string }
+
 // helpView renders the key help from the live keymap, so remapped keys are
 // what the overlay shows. It lays out two columns per group, dropping to
 // one when the terminal is too narrow to hold them.
 func (m Model) helpView() string {
-	type row struct{ keys, desc string }
-	var order []int
-	groups := map[int][]row{}
-	keyW, descW := 0, 0
+	order, groups, keyW, descW := m.helpGroups()
+	// The View adds a leading space, and a wrapped line would break the grid.
+	twoCol := m.width == 0 || 2*(keyW+descW+4)+1 <= m.width
+
+	var b strings.Builder
+	b.WriteString("mdv — keys\n")
+	for _, g := range order {
+		b.WriteString("\n")
+		writeHelpGroup(&b, groups[g], keyW, descW, twoCol)
+	}
+	b.WriteString("\n" + helpFooter)
+	return b.String()
+}
+
+func (m Model) helpGroups() (order []int, groups map[int][]helpRow, keyW, descW int) {
+	groups = map[int][]helpRow{}
 	for _, c := range commands {
 		keys := m.keysFor(c.act, c.keys)
 		if len(keys) == 0 {
@@ -212,39 +226,32 @@ func (m Model) helpView() string {
 		if _, seen := groups[c.group]; !seen {
 			order = append(order, c.group)
 		}
-		groups[c.group] = append(groups[c.group], row{joined, c.desc})
+		groups[c.group] = append(groups[c.group], helpRow{joined, c.desc})
 	}
+	return order, groups, keyW, descW
+}
 
+func writeHelpGroup(b *strings.Builder, rows []helpRow, keyW, descW int, twoCol bool) {
+	step := 1
+	if twoCol {
+		step = 2
+	}
+	for i := 0; i < len(rows); i += step {
+		if twoCol && i+1 < len(rows) {
+			b.WriteString(helpCell(rows[i], keyW, descW, false) + helpCell(rows[i+1], keyW, descW, true) + "\n")
+		} else {
+			b.WriteString(helpCell(rows[i], keyW, descW, true) + "\n")
+		}
+	}
+}
+
+func helpCell(r helpRow, keyW, descW int, last bool) string {
 	pad := func(s string, w int) string {
 		return s + strings.Repeat(" ", max(0, w-runewidth.StringWidth(s)))
 	}
-	cell := func(r row, last bool) string {
-		s := "  " + pad(r.keys, keyW) + "  "
-		if last {
-			return s + r.desc
-		}
-		return s + pad(r.desc, descW)
+	s := "  " + pad(r.keys, keyW) + "  "
+	if last {
+		return s + r.desc
 	}
-	// The View adds a leading space, and a wrapped line would break the grid.
-	twoCol := m.width == 0 || 2*(keyW+descW+4)+1 <= m.width
-
-	var b strings.Builder
-	b.WriteString("mdv — keys\n")
-	for _, g := range order {
-		b.WriteString("\n")
-		rows := groups[g]
-		step := 1
-		if twoCol {
-			step = 2
-		}
-		for i := 0; i < len(rows); i += step {
-			if twoCol && i+1 < len(rows) {
-				b.WriteString(cell(rows[i], false) + cell(rows[i+1], true) + "\n")
-			} else {
-				b.WriteString(cell(rows[i], true) + "\n")
-			}
-		}
-	}
-	b.WriteString("\n" + helpFooter)
-	return b.String()
+	return s + pad(r.desc, descW)
 }

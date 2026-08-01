@@ -256,113 +256,176 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, m.watchCmd()
 	case tea.MouseMsg:
-		if m.mode == modeTOC {
-			return m, nil
-		}
-		switch {
-		case msg.Button == tea.MouseButtonWheelUp:
-			m.scroll(-3)
-		case msg.Button == tea.MouseButtonWheelDown:
-			m.scroll(3)
-		case msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && m.mode == modeNormal:
-			if idx := m.offset + msg.Y; idx < len(m.lines) && msg.X >= 1+m.gutter {
-				if url := linkAtCell(m.lines[idx], msg.X-1-m.gutter); url != "" {
-					return m, m.followLink(url)
-				}
-			}
-		}
+		return m.handleMouse(msg)
 	case tea.KeyMsg:
-		m.flash = ""
-		if msg.Type == tea.KeyCtrlC {
-			m.hardQuit = true
-			return m, m.quitCmd()
-		}
-		switch m.mode {
-		case modeSearch:
-			return m.updateSearch(msg)
-		case modeTOC:
-			return m.updateTOC(msg)
-		case modeHints:
-			return m.updateHints(msg)
-		case modeVisual:
-			return m.updateVisual(msg)
-		case modeHelp:
-			// esc closes an overlay whatever it is bound to elsewhere.
-			switch act := m.keys[msg.String()]; {
-			case act == actQuit:
-				return m, m.quitCmd()
-			case act == actHelp, msg.String() == "esc":
-				m.mode = modeNormal
+		return m.handleKey(msg)
+	}
+	return m, nil
+}
+
+func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	if m.mode == modeTOC {
+		return m, nil
+	}
+	switch {
+	case msg.Button == tea.MouseButtonWheelUp:
+		m.scroll(-3)
+	case msg.Button == tea.MouseButtonWheelDown:
+		m.scroll(3)
+	case msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && m.mode == modeNormal:
+		if idx := m.offset + msg.Y; idx < len(m.lines) && msg.X >= 1+m.gutter {
+			if url := linkAtCell(m.lines[idx], msg.X-1-m.gutter); url != "" {
+				return m, m.followLink(url)
 			}
-			return m, nil
-		}
-		switch m.keys[msg.String()] {
-		case actQuit:
-			return m, m.quitCmd()
-		case actHelp:
-			m.mode = modeHelp
-		case actClearSearch:
-			m.clearSearch()
-		case actSearch:
-			m.mode = modeSearch
-			m.searchOrigin = m.offset
-			m.query = ""
-			m.refreshSearch(false)
-		case actNextMatch:
-			m.nextMatch(1)
-		case actPrevMatch:
-			m.nextMatch(-1)
-		case actTOC:
-			m.mode = modeTOC
-			m.tocQuery = ""
-			m.tocSel = 0
-			m.refilterTOC()
-		case actHints:
-			m.startHints()
-		case actJumpBack:
-			if p, ok := m.jump.Back(m.posHere()); ok {
-				m.restore(p)
-			} else {
-				m.flash = "at oldest jump"
-			}
-		case actJumpForward: // terminals send Ctrl+I as Tab
-			if p, ok := m.jump.Forward(m.posHere()); ok {
-				m.restore(p)
-			} else {
-				m.flash = "at newest jump"
-			}
-		case actEdit:
-			if cmd := m.editorCmd(); cmd != nil {
-				return m, cmd
-			}
-		case actYank:
-			if cmd := m.yank(); cmd != nil {
-				return m, cmd
-			}
-		case actVisual:
-			m.startVisual()
-		case actLineNumbers:
-			m.lineNums = !m.lineNums
-			m.reflow()
-		case actLineDown:
-			m.scroll(1)
-		case actLineUp:
-			m.scroll(-1)
-		case actHalfDown:
-			m.scroll(m.contentHeight() / 2)
-		case actHalfUp:
-			m.scroll(-m.contentHeight() / 2)
-		case actPageDown:
-			m.scroll(m.contentHeight())
-		case actPageUp:
-			m.scroll(-m.contentHeight())
-		case actTop:
-			m.offset = 0
-		case actBottom:
-			m.offset = m.maxOffset()
 		}
 	}
 	return m, nil
+}
+
+func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	m.flash = ""
+	if msg.Type == tea.KeyCtrlC {
+		m.hardQuit = true
+		return m, m.quitCmd()
+	}
+	switch m.mode {
+	case modeSearch:
+		return m.updateSearch(msg)
+	case modeTOC:
+		return m.updateTOC(msg)
+	case modeHints:
+		return m.updateHints(msg)
+	case modeVisual:
+		return m.updateVisual(msg)
+	case modeHelp:
+		return m.handleHelpKey(msg)
+	}
+	return m.handleNormalKey(msg)
+}
+
+func (m Model) handleHelpKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// esc closes an overlay whatever it is bound to elsewhere.
+	switch act := m.keys[msg.String()]; {
+	case act == actQuit:
+		return m, m.quitCmd()
+	case act == actHelp, msg.String() == "esc":
+		m.mode = modeNormal
+	}
+	return m, nil
+}
+
+func (m Model) handleNormalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	act := m.keys[msg.String()]
+	if cmd, handled := m.tryScroll(act); handled {
+		return m, cmd
+	}
+	if cmd, handled := m.tryCommand(act); handled {
+		return m, cmd
+	}
+	return m, nil
+}
+
+// tryScroll handles movement keys. The second return is whether act was one.
+func (m *Model) tryScroll(act action) (tea.Cmd, bool) {
+	switch act {
+	case actLineDown:
+		m.scroll(1)
+	case actLineUp:
+		m.scroll(-1)
+	case actHalfDown:
+		m.scroll(m.contentHeight() / 2)
+	case actHalfUp:
+		m.scroll(-m.contentHeight() / 2)
+	case actPageDown:
+		m.scroll(m.contentHeight())
+	case actPageUp:
+		m.scroll(-m.contentHeight())
+	case actTop:
+		m.offset = 0
+	case actBottom:
+		m.offset = m.maxOffset()
+	default:
+		return nil, false
+	}
+	return nil, true
+}
+
+// tryCommand handles non-scroll normal-mode actions.
+func (m *Model) tryCommand(act action) (tea.Cmd, bool) {
+	if cmd, ok := m.tryOverlay(act); ok {
+		return cmd, true
+	}
+	if cmd, ok := m.tryNavAction(act); ok {
+		return cmd, true
+	}
+	return nil, false
+}
+
+func (m *Model) tryOverlay(act action) (tea.Cmd, bool) {
+	switch act {
+	case actQuit:
+		return m.quitCmd(), true
+	case actHelp:
+		m.mode = modeHelp
+	case actClearSearch:
+		m.clearSearch()
+	case actSearch:
+		m.mode = modeSearch
+		m.searchOrigin = m.offset
+		m.query = ""
+		m.refreshSearch(false)
+	case actNextMatch:
+		m.nextMatch(1)
+	case actPrevMatch:
+		m.nextMatch(-1)
+	case actTOC:
+		m.mode = modeTOC
+		m.tocQuery = ""
+		m.tocSel = 0
+		m.refilterTOC()
+	case actHints:
+		m.startHints()
+	default:
+		return nil, false
+	}
+	return nil, true
+}
+
+func (m *Model) tryNavAction(act action) (tea.Cmd, bool) {
+	switch act {
+	case actJumpBack:
+		m.jumpBack()
+	case actJumpForward: // terminals send Ctrl+I as Tab
+		m.jumpForward()
+	case actEdit:
+		return m.editorCmd(), true
+	case actYank:
+		return m.yank(), true
+	case actVisual:
+		m.startVisual()
+	case actLineNumbers:
+		m.lineNums = !m.lineNums
+		m.reflow()
+	default:
+		return nil, false
+	}
+	return nil, true
+}
+
+func (m *Model) jumpBack() {
+	if p, ok := m.jump.Back(m.posHere()); ok {
+		m.restore(p)
+		return
+	}
+	m.flash = "at oldest jump"
+}
+
+func (m *Model) jumpForward() {
+	if p, ok := m.jump.Forward(m.posHere()); ok {
+		m.restore(p)
+		return
+	}
+	m.flash = "at newest jump"
 }
 
 func (m Model) View() string {
@@ -412,50 +475,73 @@ func (m Model) gutterFor(idx int) string {
 // search highlights, hint labels, and the visual selection as needed.
 func (m Model) renderLine(idx int) string {
 	ranges := m.lineRanges[idx]
-	hasHint := false
-	if m.mode == modeHints {
-		for _, h := range m.hints {
-			if h.line == idx {
-				hasHint = true
-				break
-			}
-		}
-	}
-	inSel := false
-	if m.mode == modeVisual {
-		lo, hi := m.selBounds()
-		inSel = idx >= lo && idx <= hi
-	}
+	hasHint := m.lineHasHint(idx)
+	inSel := m.lineInSelection(idx)
 	if len(ranges) == 0 && !hasHint && !inSel {
 		return m.rendered[idx]
 	}
 	ln := m.lines[idx]
-	if len(ranges) > 0 {
-		ln = ln.Highlight(ranges, &m.th.SearchHit)
-		if m.cur >= 0 {
-			if mt := m.matches[m.cur]; mt.line == idx {
-				ln = ln.Highlight([][2]int{{mt.start, mt.end}}, &m.th.SearchCurrent)
-			}
-		}
-	}
+	ln = m.applySearchHighlight(ln, idx, ranges)
 	if hasHint {
-		// Overlay right-to-left so earlier byte offsets stay valid.
-		for i := len(m.hints) - 1; i >= 0; i-- {
-			h := m.hints[i]
-			if h.line != idx || !strings.HasPrefix(h.label, m.hintPrefix) {
-				continue
-			}
-			ln = overlayLabel(ln, h.at, h.label, &m.th.HintLabel)
-		}
+		ln = m.applyHintLabels(ln, idx)
 	}
 	if inSel {
-		if len(ln.Spans) == 0 {
-			// An empty row still needs a visible cell to read as selected.
-			ln = render.Line{Spans: []render.Span{{Text: " "}}, SourceLine: ln.SourceLine}
-		}
-		ln = ln.Highlight([][2]int{{0, len(ln.Plain())}}, &m.th.Selection)
+		ln = m.applySelection(ln)
 	}
 	return ln.String()
+}
+
+func (m Model) lineHasHint(idx int) bool {
+	if m.mode != modeHints {
+		return false
+	}
+	for _, h := range m.hints {
+		if h.line == idx {
+			return true
+		}
+	}
+	return false
+}
+
+func (m Model) lineInSelection(idx int) bool {
+	if m.mode != modeVisual {
+		return false
+	}
+	lo, hi := m.selBounds()
+	return idx >= lo && idx <= hi
+}
+
+func (m Model) applySearchHighlight(ln render.Line, idx int, ranges [][2]int) render.Line {
+	if len(ranges) == 0 {
+		return ln
+	}
+	ln = ln.Highlight(ranges, &m.th.SearchHit)
+	if m.cur >= 0 {
+		if mt := m.matches[m.cur]; mt.line == idx {
+			ln = ln.Highlight([][2]int{{mt.start, mt.end}}, &m.th.SearchCurrent)
+		}
+	}
+	return ln
+}
+
+func (m Model) applyHintLabels(ln render.Line, idx int) render.Line {
+	// Overlay right-to-left so earlier byte offsets stay valid.
+	for i := len(m.hints) - 1; i >= 0; i-- {
+		h := m.hints[i]
+		if h.line != idx || !strings.HasPrefix(h.label, m.hintPrefix) {
+			continue
+		}
+		ln = overlayLabel(ln, h.at, h.label, &m.th.HintLabel)
+	}
+	return ln
+}
+
+func (m Model) applySelection(ln render.Line) render.Line {
+	if len(ln.Spans) == 0 {
+		// An empty row still needs a visible cell to read as selected.
+		ln = render.Line{Spans: []render.Span{{Text: " "}}, SourceLine: ln.SourceLine}
+	}
+	return ln.Highlight([][2]int{{0, len(ln.Plain())}}, &m.th.Selection)
 }
 
 func (m Model) contentHeight() int {

@@ -57,49 +57,11 @@ func main() {
 		os.Exit(runUpdate(len(args) > 1 && (args[1] == "--check" || args[1] == "-check")))
 	}
 
-	// A directory, several files, or no argument at all on a terminal all
-	// go through the browser; one argument names a document to render.
-	var browseRoot string
-	var browseList []ui.FileEntry
-	var browseTrunc bool
-
-	var src []byte
-	var name, path string
-	var err error
-	switch {
-	case len(args) == 0 && !stdinPiped:
-		browseRoot = "."
-	case len(args) == 1 && args[0] != "-" && ui.IsDir(args[0]):
-		browseRoot = args[0]
-	case len(args) > 1:
-		for _, a := range args {
-			if fetch.IsRemote(a) {
-				fmt.Fprintln(os.Stderr, "mdv: several files at once are local only; fetch one remote document at a time")
-				os.Exit(2)
-			}
-		}
-		browseRoot = "."
-		browseList, err = ui.EntriesFromPaths(args)
-	case len(args) == 1 && fetch.IsRemote(args[0]):
-		src, name, err = fetch.Get(args[0])
-	case len(args) == 1 && args[0] != "-":
-		src, err = os.ReadFile(args[0])
-		name = args[0]
-		if abs, aerr := filepath.Abs(args[0]); aerr == nil {
-			path = abs
-		}
-	case len(args) == 1 || (len(args) == 0 && stdinPiped):
-		src, err = io.ReadAll(os.Stdin)
-		name = "(stdin)"
-	default:
-		flag.Usage()
-		os.Exit(2)
-	}
+	in, err := resolveInput(args, stdinPiped)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "mdv:", err)
 		os.Exit(1)
 	}
-	browsing := browseRoot != ""
 
 	th, err := pickTheme(*themeFlag, cfg)
 	if err != nil {
@@ -109,24 +71,27 @@ func main() {
 	if *widthFlag == 0 && cfg.Width > 0 {
 		*widthFlag = cfg.Width
 	}
-	if browsing {
-		if !term.IsTerminal(int(os.Stdout.Fd())) {
-			fmt.Fprintln(os.Stderr, "mdv: browsing needs a terminal; name a file to render")
-			os.Exit(2)
-		}
-		if err := browse(browseRoot, browseList, browseTrunc, th, cfg, *widthFlag); err != nil {
-			fmt.Fprintln(os.Stderr, "mdv:", err)
-			os.Exit(1)
-		}
-		return
+	if err := run(in, th, cfg, *widthFlag, stdinPiped); err != nil {
+		fmt.Fprintln(os.Stderr, "mdv:", err)
+		os.Exit(1)
 	}
-	doc := parser.Parse(src)
+}
+
+// run either starts the directory browser or shows a single document.
+func run(in input, th theme.Theme, cfg config.Config, width int, stdinPiped bool) error {
+	if in.browseRoot != "" {
+		if !term.IsTerminal(int(os.Stdout.Fd())) {
+			return fmt.Errorf("browsing needs a terminal; name a file to render")
+		}
+		return browse(in.browseRoot, in.browseList, in.browseTrunc, th, cfg, width)
+	}
+	doc := parser.Parse(in.src)
 
 	// Not a terminal: dump the rendered document and exit. The mono color
 	// profile strips styling and OSC 8 automatically in this case.
 	if !term.IsTerminal(int(os.Stdout.Fd())) {
-		dump(doc, th, *widthFlag)
-		return
+		dump(doc, th, width)
+		return nil
 	}
 
 	// A document read from a pipe leaves stdin exhausted, so the pager has
@@ -135,10 +100,88 @@ func main() {
 	// runner — there is nothing to drive a pager with, but the document is
 	// already parsed and printing it beats failing with nothing at all.
 	// "curl … | mdv" should always put the document on screen.
-	if _, err := runPager(doc, th, name, path, cfg, *widthFlag, stdinPiped); err != nil {
+	if _, err := runPager(doc, th, in.name, in.path, cfg, width, stdinPiped); err != nil {
 		fmt.Fprintln(os.Stderr, "mdv:", err, "(rendering as plain text)")
-		dump(doc, th, *widthFlag)
+		dump(doc, th, width)
 	}
+	return nil
+}
+
+// input is either a document to render or a directory/file list to browse.
+type input struct {
+	src         []byte
+	name, path  string
+	browseRoot  string
+	browseList  []ui.FileEntry
+	browseTrunc bool
+}
+
+// resolveInput decides whether args mean browse, fetch, read a file, or
+// read stdin. A directory, several files, or no argument on a terminal all
+// go through the browser; one argument names a document to render.
+func resolveInput(args []string, stdinPiped bool) (input, error) {
+	if len(args) == 0 && !stdinPiped {
+		return input{browseRoot: "."}, nil
+	}
+	if len(args) == 1 && args[0] != "-" && ui.IsDir(args[0]) {
+		return input{browseRoot: args[0]}, nil
+	}
+	if len(args) > 1 {
+		return multiFileInput(args)
+	}
+	if len(args) == 1 && fetch.IsRemote(args[0]) {
+		return remoteInput(args[0])
+	}
+	if len(args) == 1 && args[0] != "-" {
+		return fileInput(args[0])
+	}
+	if len(args) == 1 || (len(args) == 0 && stdinPiped) {
+		return stdinInput()
+	}
+	flag.Usage()
+	os.Exit(2)
+	return input{}, nil
+}
+
+func multiFileInput(args []string) (input, error) {
+	for _, a := range args {
+		if fetch.IsRemote(a) {
+			return input{}, fmt.Errorf("several files at once are local only; fetch one remote document at a time")
+		}
+	}
+	list, err := ui.EntriesFromPaths(args)
+	if err != nil {
+		return input{}, err
+	}
+	return input{browseRoot: ".", browseList: list}, nil
+}
+
+func remoteInput(url string) (input, error) {
+	src, name, err := fetch.Get(url)
+	if err != nil {
+		return input{}, err
+	}
+	return input{src: src, name: name}, nil
+}
+
+func fileInput(path string) (input, error) {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return input{}, err
+	}
+	in := input{src: src, name: path}
+	if abs, aerr := filepath.Abs(path); aerr == nil {
+		in.path = abs
+	}
+	return in, nil
+}
+
+func stdinInput() (input, error) {
+	src, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return input{}, err
+	}
+	return input{src: src, name: "(stdin)"}, nil
 }
 
 // fileExists reports whether path names something on disk, so a document
@@ -213,35 +256,46 @@ func browse(root string, entries []ui.FileEntry, truncated bool, th theme.Theme,
 		}
 	}
 	for {
-		b := ui.NewBrowser(root, entries, truncated, th)
-		final, err := tea.NewProgram(b, tea.WithAltScreen()).Run()
+		path, hardQuit, err := pickFile(root, entries, truncated, th)
 		if err != nil {
 			return err
 		}
-		picked, ok := final.(ui.Browser)
-		if !ok || picked.HardQuit() {
+		if hardQuit || path == "" {
 			return nil
 		}
-		path, chose := picked.Chosen()
-		if !chose {
-			return nil
-		}
-		src, rerr := os.ReadFile(path)
-		if rerr != nil {
-			return rerr
-		}
-		name := path
-		if rel, relErr := filepath.Rel(root, path); relErr == nil {
-			name = rel
-		}
-		hard, perr := runPager(parser.Parse(src), th, name, path, cfg, width, false)
-		if perr != nil {
-			return perr
-		}
-		if hard {
-			return nil
+		if hard, err := openPicked(root, path, th, cfg, width); err != nil || hard {
+			return err
 		}
 	}
+}
+
+func pickFile(root string, entries []ui.FileEntry, truncated bool, th theme.Theme) (path string, hardQuit bool, err error) {
+	b := ui.NewBrowser(root, entries, truncated, th)
+	final, err := tea.NewProgram(b, tea.WithAltScreen()).Run()
+	if err != nil {
+		return "", false, err
+	}
+	picked, ok := final.(ui.Browser)
+	if !ok || picked.HardQuit() {
+		return "", true, nil
+	}
+	path, chose := picked.Chosen()
+	if !chose {
+		return "", false, nil
+	}
+	return path, false, nil
+}
+
+func openPicked(root, path string, th theme.Theme, cfg config.Config, width int) (hardQuit bool, err error) {
+	src, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	name := path
+	if rel, relErr := filepath.Rel(root, path); relErr == nil {
+		name = rel
+	}
+	return runPager(parser.Parse(src), th, name, path, cfg, width, false)
 }
 
 // pickTheme resolves the theme with precedence: --theme flag, then

@@ -150,15 +150,7 @@ func (r *renderer) list(n *ast.List, width int) []Line {
 	r.listDepth++
 	defer func() { r.listDepth-- }()
 
-	markerW := 2
-	num := n.Start
-	if n.IsOrdered() {
-		items := 0
-		for c := n.FirstChild(); c != nil; c = c.NextSibling() {
-			items++
-		}
-		markerW = len(strconv.Itoa(n.Start+items-1)) + 2
-	}
+	markerW, num := listMarkerWidth(n), n.Start
 	innerW := width - markerW
 	if innerW < 4 {
 		innerW = 4
@@ -170,27 +162,48 @@ func (r *renderer) list(n *ast.List, width int) []Line {
 		if len(content) == 0 {
 			content = []Line{{SourceLine: nodeLine(r.doc, c)}}
 		}
-		var marker string
+		marker := listMarker(n, depth, markerW, num)
 		if n.IsOrdered() {
-			marker = fmt.Sprintf("%*d. ", markerW-2, num)
 			num++
-		} else {
-			marker = bullets[depth%len(bullets)] + " "
 		}
 		if len(out) > 0 && !n.IsTight {
 			out = append(out, Line{SourceLine: content[0].SourceLine})
 		}
-		for i, ln := range content {
-			switch {
-			case i == 0:
-				pre := Span{Text: marker, Style: &r.th.ListMarker}
-				out = append(out, Line{Spans: prepend(pre, ln.Spans), SourceLine: ln.SourceLine})
-			case len(ln.Spans) == 0:
-				out = append(out, ln)
-			default:
-				pre := Span{Text: strings.Repeat(" ", markerW)}
-				out = append(out, Line{Spans: prepend(pre, ln.Spans), SourceLine: ln.SourceLine})
-			}
+		out = append(out, padListItem(content, marker, markerW, &r.th.ListMarker)...)
+	}
+	return out
+}
+
+func listMarkerWidth(n *ast.List) int {
+	if !n.IsOrdered() {
+		return 2
+	}
+	items := 0
+	for c := n.FirstChild(); c != nil; c = c.NextSibling() {
+		items++
+	}
+	return len(strconv.Itoa(n.Start+items-1)) + 2
+}
+
+func listMarker(n *ast.List, depth, markerW, num int) string {
+	if n.IsOrdered() {
+		return fmt.Sprintf("%*d. ", markerW-2, num)
+	}
+	return bullets[depth%len(bullets)] + " "
+}
+
+func padListItem(content []Line, marker string, markerW int, markerStyle *lipgloss.Style) []Line {
+	out := make([]Line, 0, len(content))
+	for i, ln := range content {
+		switch {
+		case i == 0:
+			pre := Span{Text: marker, Style: markerStyle}
+			out = append(out, Line{Spans: prepend(pre, ln.Spans), SourceLine: ln.SourceLine})
+		case len(ln.Spans) == 0:
+			out = append(out, ln)
+		default:
+			pre := Span{Text: strings.Repeat(" ", markerW)}
+			out = append(out, Line{Spans: prepend(pre, ln.Spans), SourceLine: ln.SourceLine})
 		}
 	}
 	return out

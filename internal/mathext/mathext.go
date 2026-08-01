@@ -110,9 +110,11 @@ func (p blockParser) Continue(node ast.Node, reader text.Reader, pc parser.Conte
 	return parser.Continue | parser.NoChildren
 }
 
-func (p blockParser) Close(node ast.Node, reader text.Reader, pc parser.Context) {}
-func (p blockParser) CanInterruptParagraph() bool                                { return true }
-func (p blockParser) CanAcceptIndentedLine() bool                                { return false }
+func (p blockParser) Close(node ast.Node, reader text.Reader, pc parser.Context) {
+	// MathBlock lines are finalized in Continue; the closer $$ is not kept.
+}
+func (p blockParser) CanInterruptParagraph() bool { return true }
+func (p blockParser) CanAcceptIndentedLine() bool { return false }
 
 type extender struct{}
 
