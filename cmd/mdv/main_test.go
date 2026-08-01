@@ -53,25 +53,30 @@ func TestDumpWidth(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("COLUMNS", tc.columns)
-			out := captureStdout(t, func() { dump(doc, theme.Plain(), tc.widthFlag) })
-			if strings.TrimSpace(out) == "" {
-				t.Fatal("dump produced nothing")
-			}
-			widest := 0
-			for _, ln := range strings.Split(out, "\n") {
-				if n := len([]rune(ln)); n > widest {
-					widest = n
-				}
-			}
-			if widest > tc.want {
-				t.Errorf("widest line is %d cells, want <= %d", widest, tc.want)
-			}
-			// Guard against a width so small the text is shredded: real
-			// wrapping should get reasonably close to the target.
-			if tc.want >= 30 && widest < tc.want/2 {
-				t.Errorf("widest line is only %d cells at width %d; text looks over-wrapped", widest, tc.want)
-			}
+			assertDumpWidth(t, doc, tc.widthFlag, tc.want)
 		})
+	}
+}
+
+func assertDumpWidth(t *testing.T, doc *parser.Doc, widthFlag, want int) {
+	t.Helper()
+	out := captureStdout(t, func() { dump(doc, theme.Plain(), widthFlag) })
+	if strings.TrimSpace(out) == "" {
+		t.Fatal("dump produced nothing")
+	}
+	widest := 0
+	for _, ln := range strings.Split(out, "\n") {
+		if n := len([]rune(ln)); n > widest {
+			widest = n
+		}
+	}
+	if widest > want {
+		t.Errorf("widest line is %d cells, want <= %d", widest, want)
+	}
+	// Guard against a width so small the text is shredded: real
+	// wrapping should get reasonably close to the target.
+	if want >= 30 && widest < want/2 {
+		t.Errorf("widest line is only %d cells at width %d; text looks over-wrapped", widest, want)
 	}
 }
 

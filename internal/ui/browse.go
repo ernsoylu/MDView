@@ -62,30 +62,19 @@ func FindMarkdown(root string) ([]FileEntry, bool, error) {
 	var out []FileEntry
 	truncated := false
 	err = filepath.WalkDir(abs, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			if d != nil && d.IsDir() {
-				return fs.SkipDir
-			}
-			return nil
+		entry, skip, done, walkErr := walkMarkdown(abs, path, d, err, len(out))
+		if walkErr != nil {
+			return walkErr
 		}
-		if len(out) >= maxBrowseEntries {
+		if done {
 			truncated = true
 			return filepath.SkipAll
 		}
-		name := d.Name()
-		if d.IsDir() {
-			if path != abs && (strings.HasPrefix(name, ".") || skipDirs[name]) {
-				return fs.SkipDir
-			}
-			return nil
+		if skip {
+			return fs.SkipDir
 		}
-		switch strings.ToLower(filepath.Ext(name)) {
-		case ".md", ".markdown":
-			rel, rerr := filepath.Rel(abs, path)
-			if rerr != nil {
-				rel = path
-			}
-			out = append(out, FileEntry{Rel: render.Sanitize(rel), Abs: path})
+		if entry != nil {
+			out = append(out, *entry)
 		}
 		return nil
 	})
@@ -94,6 +83,44 @@ func FindMarkdown(root string) ([]FileEntry, bool, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Rel < out[j].Rel })
 	return out, truncated, nil
+}
+
+// walkMarkdown classifies one WalkDir visit. done means the entry cap was
+// hit; skip means the directory should be skipped.
+func walkMarkdown(root, path string, d fs.DirEntry, err error, n int) (entry *FileEntry, skip, done bool, walkErr error) {
+	if err != nil {
+		if d != nil && d.IsDir() {
+			return nil, true, false, nil
+		}
+		return nil, false, false, nil
+	}
+	if n >= maxBrowseEntries {
+		return nil, false, true, nil
+	}
+	name := d.Name()
+	if d.IsDir() {
+		if path != root && (strings.HasPrefix(name, ".") || skipDirs[name]) {
+			return nil, true, false, nil
+		}
+		return nil, false, false, nil
+	}
+	if !isMarkdownName(name) {
+		return nil, false, false, nil
+	}
+	rel, rerr := filepath.Rel(root, path)
+	if rerr != nil {
+		rel = path
+	}
+	e := FileEntry{Rel: render.Sanitize(rel), Abs: path}
+	return &e, false, false, nil
+}
+
+func isMarkdownName(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".md", ".markdown":
+		return true
+	}
+	return false
 }
 
 // Browser is the file picker mdv shows when it is pointed at a directory,

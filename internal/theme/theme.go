@@ -32,6 +32,9 @@ type Theme struct {
 	Chroma        *chroma.Style  // syntax highlighting palette for code blocks
 }
 
+// searchFg is the light-mode foreground for high-contrast search/hint chips.
+const searchFg = "#eff1f5"
+
 // Default is the built-in adaptive theme (Catppuccin Latte/Mocha accents).
 func Default() Theme {
 	heading := func(light, dark string) lipgloss.Style {
@@ -59,13 +62,13 @@ func Default() Theme {
 	t.Dim = lipgloss.NewStyle().Faint(true)
 	t.StatusBar = lipgloss.NewStyle().Reverse(true)
 	t.SearchHit = lipgloss.NewStyle().
-		Foreground(lipgloss.AdaptiveColor{Light: "#eff1f5", Dark: "#1e1e2e"}).
+		Foreground(lipgloss.AdaptiveColor{Light: searchFg, Dark: "#1e1e2e"}).
 		Background(lipgloss.AdaptiveColor{Light: "#df8e1d", Dark: "#f9e2af"})
 	t.SearchCurrent = lipgloss.NewStyle().
-		Foreground(lipgloss.AdaptiveColor{Light: "#eff1f5", Dark: "#1e1e2e"}).
+		Foreground(lipgloss.AdaptiveColor{Light: searchFg, Dark: "#1e1e2e"}).
 		Background(lipgloss.AdaptiveColor{Light: "#fe640b", Dark: "#fab387"})
 	t.HintLabel = lipgloss.NewStyle().Bold(true).
-		Foreground(lipgloss.AdaptiveColor{Light: "#eff1f5", Dark: "#11111b"}).
+		Foreground(lipgloss.AdaptiveColor{Light: searchFg, Dark: "#11111b"}).
 		Background(lipgloss.AdaptiveColor{Light: "#d20f39", Dark: "#f38ba8"})
 	t.Selection = lipgloss.NewStyle().Reverse(true)
 	t.Chroma = styles.Get("catppuccin-mocha")

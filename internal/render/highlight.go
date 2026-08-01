@@ -26,35 +26,47 @@ func (l Line) Highlight(ranges [][2]int, st *lipgloss.Style) Line {
 	pos := 0
 	ri := 0
 	for _, sp := range l.Spans {
-		spStart, spEnd := pos, pos+len(sp.Text)
-		cut := spStart
-		for cut < spEnd {
-			for ri < len(ranges) && ranges[ri][1] <= cut {
-				ri++
-			}
-			segEnd := spEnd
-			inHit := false
-			switch {
-			case ri >= len(ranges) || ranges[ri][0] >= spEnd:
-				// no range intersects the rest of this span
-			case ranges[ri][0] > cut:
-				segEnd = ranges[ri][0]
-			default:
-				if e := ranges[ri][1]; e < spEnd {
-					segEnd = e
-				}
-				inHit = true
-			}
-			style := sp.Style
-			if inHit {
-				style = st
-			}
-			if txt := sp.Text[cut-spStart : segEnd-spStart]; txt != "" {
-				out = append(out, Span{Text: txt, Style: style, Link: sp.Link})
-			}
-			cut = segEnd
-		}
-		pos = spEnd
+		out, ri = highlightSpan(out, sp, pos, ranges, ri, st)
+		pos += len(sp.Text)
 	}
 	return Line{Spans: out, SourceLine: l.SourceLine}
+}
+
+// highlightSpan splits one span against the remaining highlight ranges and
+// appends the pieces to out. ri is the index of the first live range.
+func highlightSpan(out []Span, sp Span, pos int, ranges [][2]int, ri int, st *lipgloss.Style) ([]Span, int) {
+	spStart, spEnd := pos, pos+len(sp.Text)
+	cut := spStart
+	for cut < spEnd {
+		for ri < len(ranges) && ranges[ri][1] <= cut {
+			ri++
+		}
+		segEnd, inHit := highlightSeg(cut, spEnd, ranges, ri)
+		style := sp.Style
+		if inHit {
+			style = st
+		}
+		if txt := sp.Text[cut-spStart : segEnd-spStart]; txt != "" {
+			out = append(out, Span{Text: txt, Style: style, Link: sp.Link})
+		}
+		cut = segEnd
+	}
+	return out, ri
+}
+
+// highlightSeg picks the next piece of [cut, spEnd) against ranges[ri].
+func highlightSeg(cut, spEnd int, ranges [][2]int, ri int) (segEnd int, inHit bool) {
+	segEnd = spEnd
+	switch {
+	case ri >= len(ranges) || ranges[ri][0] >= spEnd:
+		// no range intersects the rest of this span
+	case ranges[ri][0] > cut:
+		segEnd = ranges[ri][0]
+	default:
+		if e := ranges[ri][1]; e < spEnd {
+			segEnd = e
+		}
+		inHit = true
+	}
+	return segEnd, inHit
 }

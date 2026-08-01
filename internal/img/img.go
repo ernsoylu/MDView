@@ -6,9 +6,9 @@ package img
 import (
 	"image"
 	"image/color"
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
+	_ "image/gif"  // register GIF decoder for image.Decode
+	_ "image/jpeg" // register JPEG decoder for image.Decode
+	_ "image/png"  // register PNG decoder for image.Decode
 	"os"
 
 	"golang.org/x/image/draw"

@@ -28,6 +28,8 @@ type Config struct {
 	Mermaid bool `yaml:"mermaid"`
 }
 
+const configFile = "config.yaml"
+
 // Dir returns the configuration directory, "" when home is undetectable.
 func Dir() string {
 	home, err := os.UserHomeDir()
@@ -67,11 +69,12 @@ func Ensure() (Config, error) {
 	if err := os.MkdirAll(d, 0o755); err != nil {
 		return Config{}, nil
 	}
-	seed(filepath.Join(d, "config.yaml"), configTemplate)
+	seed(filepath.Join(d, configFile), configTemplate)
 	seed(filepath.Join(d, "theme.yaml"), themeTemplate)
 	seed(filepath.Join(d, "keys.yaml"), keysTemplate)
 
-	data, err := os.ReadFile(filepath.Join(d, "config.yaml"))
+	cfgPath := filepath.Join(d, configFile)
+	data, err := os.ReadFile(cfgPath)
 	if err != nil {
 		return Config{}, nil
 	}
@@ -82,7 +85,7 @@ func Ensure() (Config, error) {
 		if errors.Is(err, io.EOF) { // fully commented / empty
 			return Config{}, nil
 		}
-		return Config{}, fmt.Errorf("%s: %w", filepath.Join(d, "config.yaml"), err)
+		return Config{}, fmt.Errorf("%s: %w", cfgPath, err)
 	}
 	return c, nil
 }

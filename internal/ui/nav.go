@@ -103,43 +103,55 @@ func (m *Model) reload() {
 // markdown files open in mdv, everything else goes to the system opener.
 // All in-app jumps push onto the jumplist first.
 func (m *Model) followLink(target string) tea.Cmd {
-	switch {
-	case strings.HasPrefix(target, "#"):
-		if line, ok := m.anchors[normalizeFragment(target[1:])]; ok {
-			m.jump.Push(m.posHere())
+	if strings.HasPrefix(target, "#") {
+		m.followAnchor(target)
+		return nil
+	}
+	if strings.Contains(target, "://") || strings.HasPrefix(target, "mailto:") {
+		return m.followExternal(target)
+	}
+	return m.followRelative(target)
+}
+
+func (m *Model) followAnchor(target string) {
+	if line, ok := m.anchors[normalizeFragment(target[1:])]; ok {
+		m.jump.Push(m.posHere())
+		m.jumpToSourceLine(line)
+		return
+	}
+	m.flash = "no such anchor: " + target
+}
+
+func (m *Model) followExternal(target string) tea.Cmd {
+	if !webScheme(target) {
+		m.flash = "refusing to open non-web link: " + target
+		return nil
+	}
+	return m.openExternalCmd(target)
+}
+
+func (m *Model) followRelative(target string) tea.Cmd {
+	pathPart, frag, _ := strings.Cut(target, "#")
+	if m.path == "" {
+		m.flash = "cannot follow relative links from stdin"
+		return nil
+	}
+	abs := pathPart
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(filepath.Dir(m.path), abs)
+	}
+	if ext := strings.ToLower(filepath.Ext(abs)); ext != ".md" && ext != ".markdown" {
+		return m.openExternalCmd(abs)
+	}
+	from := m.posHere()
+	if err := m.loadFile(abs); err != nil {
+		m.flash = err.Error()
+		return nil
+	}
+	m.jump.Push(from)
+	if frag != "" {
+		if line, ok := m.anchors[normalizeFragment(frag)]; ok {
 			m.jumpToSourceLine(line)
-		} else {
-			m.flash = "no such anchor: " + target
-		}
-	case strings.Contains(target, "://") || strings.HasPrefix(target, "mailto:"):
-		if !webScheme(target) {
-			m.flash = "refusing to open non-web link: " + target
-			return nil
-		}
-		return m.openExternalCmd(target)
-	default:
-		pathPart, frag, _ := strings.Cut(target, "#")
-		if m.path == "" {
-			m.flash = "cannot follow relative links from stdin"
-			return nil
-		}
-		abs := pathPart
-		if !filepath.IsAbs(abs) {
-			abs = filepath.Join(filepath.Dir(m.path), abs)
-		}
-		if ext := strings.ToLower(filepath.Ext(abs)); ext != ".md" && ext != ".markdown" {
-			return m.openExternalCmd(abs)
-		}
-		from := m.posHere()
-		if err := m.loadFile(abs); err != nil {
-			m.flash = err.Error()
-			return nil
-		}
-		m.jump.Push(from)
-		if frag != "" {
-			if line, ok := m.anchors[normalizeFragment(frag)]; ok {
-				m.jumpToSourceLine(line)
-			}
 		}
 	}
 	return nil
